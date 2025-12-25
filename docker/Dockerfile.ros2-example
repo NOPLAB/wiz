@@ -1,0 +1,19 @@
+# ROS2 Example Publisher for wiz testing
+# Publishes sample LaserScan and PointCloud2 data
+#
+# Build: docker build -f docker/Dockerfile.ros2-example -t wiz-ros2-example .
+# Run: docker run --rm --net=host wiz-ros2-example
+
+FROM ros:humble
+
+# Install Python dependencies
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy example publisher
+COPY examples/ros2_publisher.py /ros2_publisher.py
+RUN chmod +x /ros2_publisher.py
+
+# Source ROS2 and run publisher
+CMD ["/bin/bash", "-c", "source /opt/ros/humble/setup.bash && python3 /ros2_publisher.py"]

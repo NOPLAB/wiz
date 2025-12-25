@@ -63,6 +63,14 @@ impl AppState {
         subs.remove(id).map(|s| s.topic)
     }
 
+    /// Get all active subscriptions as (topic, msg_type) pairs
+    pub fn get_subscriptions(&self) -> Vec<(String, String)> {
+        let subs = self.inner.subscriptions.read();
+        subs.values()
+            .map(|s| (s.topic.clone(), s.msg_type.clone()))
+            .collect()
+    }
+
     pub fn list_topics(&self) -> Vec<TopicInfo> {
         // Mock topics for now - will be replaced with actual ROS2 bridge
         vec![

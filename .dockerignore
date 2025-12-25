@@ -1,0 +1,29 @@
+# Build artifacts
+target/
+*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+specs/
+*.md
+
+# Claude
+.claude/
+
+# Docker
+docker/
+
+# OS
+.DS_Store
+Thumbs.db

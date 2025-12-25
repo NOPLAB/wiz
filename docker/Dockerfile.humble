@@ -1,0 +1,40 @@
+# wiz-server Docker image for ROS2 Humble
+# Build: docker build -f docker/Dockerfile.humble -t wiz-server:humble .
+# Run: docker run --rm --net=host wiz-server:humble
+
+FROM ros:humble
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    clang \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+
+# Set up ROS2 workspace
+WORKDIR /wiz
+
+# Copy project files
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
+
+# Source ROS2 and build
+RUN . /opt/ros/humble/setup.sh && \
+    cargo build --release -p wiz-server --features ros2
+
+# Expose WebSocket port
+EXPOSE 9090
+
+# Run server
+CMD [". /opt/ros/humble/setup.sh && /wiz/target/release/wiz-server"]
+ENTRYPOINT ["/bin/bash", "-c"]

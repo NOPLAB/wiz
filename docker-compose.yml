@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # wiz Server (connects to ROS2 network)
+  # ============================================
+  wiz-server-humble:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.humble
+    image: wiz-server:humble
+    network_mode: host
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    # Uncomment to enable cyclonedds
+    # volumes:
+    #   - ./cyclonedds.xml:/etc/cyclonedds/cyclonedds.xml
+    # environment:
+    #   - CYCLONEDDS_URI=file:///etc/cyclonedds/cyclonedds.xml
+
+  wiz-server-jazzy:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.jazzy
+    image: wiz-server:jazzy
+    network_mode: host
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+
+  # ============================================
+  # Example ROS2 Publisher (for testing)
+  # ============================================
+  ros2-example:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ros2-example
+    image: wiz-ros2-example
+    network_mode: host
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    profiles:
+      - example
