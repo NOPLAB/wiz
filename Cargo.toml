@@ -1,0 +1,51 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/wiz-core",
+    "crates/wiz-renderer",
+    "crates/wiz-frontend",
+    "crates/wiz-server",
+    "crates/wiz-protocol",
+]
+
+[workspace.dependencies]
+# Graphics
+wgpu = "23"
+egui = "0.29"
+eframe = "0.29"
+egui_dock = "0.14"
+egui-wgpu = "0.29"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["ws"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+rmp-serde = "1"
+toml = "0.8"
+
+# FFI
+cxx = "1"
+cxx-build = "1"
+
+# Math
+nalgebra = "0.33"
+glam = "0.29"
+bytemuck = { version = "1", features = ["derive"] }
+
+# Utilities
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+parking_lot = "0.12"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/wiz"
