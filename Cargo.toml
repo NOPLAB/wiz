@@ -10,7 +10,8 @@ members = [
 
 [workspace.dependencies]
 # Graphics
-wgpu = "23"
+# Note: wgpu version must match eframe's internal wgpu version
+wgpu = "22.1"
 egui = "0.29"
 eframe = "0.29"
 egui_dock = "0.14"

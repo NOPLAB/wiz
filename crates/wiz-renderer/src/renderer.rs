@@ -3,6 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera::Camera,
     grid::GridRenderer,
+    laser_scan::{LaserScanData, LaserScanRenderer, LaserScanVertex},
     point_cloud::{PointCloudData, PointCloudRenderer, PointVertex},
 };
 
@@ -14,7 +15,9 @@ pub struct Renderer {
     depth_view: wgpu::TextureView,
     grid_renderer: GridRenderer,
     point_cloud_renderer: PointCloudRenderer,
+    laser_scan_renderer: LaserScanRenderer,
     point_clouds: Vec<PointCloudData>,
+    laser_scans: Vec<LaserScanData>,
     format: wgpu::TextureFormat,
     width: u32,
     height: u32,
@@ -71,6 +74,14 @@ impl Renderer {
             &camera_buffer,
         );
 
+        let laser_scan_renderer = LaserScanRenderer::new(
+            device,
+            format,
+            depth_format,
+            &camera_bind_group_layout,
+            &camera_buffer,
+        );
+
         Self {
             camera,
             camera_buffer,
@@ -79,7 +90,9 @@ impl Renderer {
             depth_view,
             grid_renderer,
             point_cloud_renderer,
+            laser_scan_renderer,
             point_clouds: Vec::new(),
+            laser_scans: Vec::new(),
             format,
             width,
             height,
@@ -146,6 +159,57 @@ impl Renderer {
         self.point_clouds.clear();
     }
 
+    /// Add a laser scan to be rendered
+    pub fn add_laser_scan(&mut self, device: &wgpu::Device, vertices: &[LaserScanVertex]) -> usize {
+        let data = LaserScanData::new(device, vertices);
+        self.laser_scans.push(data);
+        self.laser_scans.len() - 1
+    }
+
+    /// Add a laser scan from raw scan parameters
+    pub fn add_laser_scan_from_data(
+        &mut self,
+        device: &wgpu::Device,
+        ranges: &[f32],
+        angle_min: f32,
+        angle_increment: f32,
+        range_min: f32,
+        range_max: f32,
+        intensities: Option<&[f32]>,
+    ) -> usize {
+        let data = LaserScanData::from_scan(
+            device,
+            ranges,
+            angle_min,
+            angle_increment,
+            range_min,
+            range_max,
+            intensities,
+        );
+        self.laser_scans.push(data);
+        self.laser_scans.len() - 1
+    }
+
+    pub fn update_laser_scan(&self, queue: &wgpu::Queue, index: usize, vertices: &[LaserScanVertex]) {
+        if let Some(ls) = self.laser_scans.get(index) {
+            ls.update(queue, vertices);
+        }
+    }
+
+    pub fn clear_laser_scans(&mut self) {
+        self.laser_scans.clear();
+    }
+
+    /// Set laser scan color
+    pub fn set_laser_scan_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
+        self.laser_scan_renderer.set_color(r, g, b, a);
+    }
+
+    /// Toggle laser scan point display mode
+    pub fn set_laser_scan_show_points(&mut self, show: bool) {
+        self.laser_scan_renderer.set_show_points(show);
+    }
+
     pub fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -154,6 +218,7 @@ impl Renderer {
     ) {
         self.update_camera(queue);
         self.point_cloud_renderer.update_settings(queue);
+        self.laser_scan_renderer.update_settings(queue);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Main Render Pass"),
@@ -189,6 +254,12 @@ impl Renderer {
         for pc in &self.point_clouds {
             self.point_cloud_renderer
                 .render(&mut render_pass, &pc.vertex_buffer, pc.vertex_count);
+        }
+
+        // Render laser scans
+        for ls in &self.laser_scans {
+            self.laser_scan_renderer
+                .render(&mut render_pass, &ls.vertex_buffer, ls.vertex_count);
         }
     }
 

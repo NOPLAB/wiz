@@ -12,6 +12,10 @@ wiz-renderer = { path = "../wiz-renderer" }
 egui = { workspace = true }
 eframe = { workspace = true, features = ["wgpu"] }
 egui_dock = { workspace = true }
+egui-wgpu = { workspace = true }
+wgpu = { workspace = true }
+bytemuck = { workspace = true }
+glam = { workspace = true }
 
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }

@@ -1,5 +1,6 @@
 mod app;
 mod panels;
+mod viewport_state;
 mod ws_client;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};

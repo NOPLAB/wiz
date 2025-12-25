@@ -88,13 +88,13 @@ impl<'a> PipelineBuilder<'a> {
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: shader,
-                    entry_point: Some("vs_main"),
+                    entry_point: "vs_main",
                     buffers: &self.vertex_layouts,
                     compilation_options: Default::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: shader,
-                    entry_point: Some("fs_main"),
+                    entry_point: "fs_main",
                     targets: &[Some(ColorTargetState {
                         format: self.format,
                         blend: Some(wgpu::BlendState::ALPHA_BLENDING),
