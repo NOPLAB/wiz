@@ -34,6 +34,7 @@ impl WizApp {
             // Add sample data for testing
             state.add_sample_point_cloud();
             state.add_sample_laser_scan();
+            state.add_sample_tf_frames();
 
             Arc::new(Mutex::new(state))
         });
@@ -105,7 +106,7 @@ impl WizApp {
                     if ui.button("Retry").clicked() {
                         self.connect();
                     }
-                    ui.colored_label(egui::Color32::RED, format!("\u{25CF} {}", msg));
+                    ui.colored_label(egui::Color32::RED, format!("\u{25CF} {msg}"));
                 }
             }
 
@@ -131,7 +132,11 @@ impl WizApp {
 
             // View options
             ui.checkbox(&mut self.show_grid, "Grid");
-            ui.checkbox(&mut self.show_tf_axes, "TF Axes");
+            if ui.checkbox(&mut self.show_tf_axes, "TF Axes").changed() {
+                if let Some(ref state) = self.viewport_state {
+                    state.lock().set_show_tf_frames(self.show_tf_axes);
+                }
+            }
 
             // Status message
             if let Some(ref msg) = self.status_message {
@@ -167,7 +172,7 @@ impl WizApp {
                     self.handle_server_message(msg);
                 }
                 WsEvent::Error(e) => {
-                    self.status_message = Some(format!("Error: {}", e));
+                    self.status_message = Some(format!("Error: {e}"));
                 }
             }
         }
@@ -209,7 +214,7 @@ impl WizApp {
                 info!("TF: {} -> {} = {:?}", source_frame, target_frame, transform);
             }
             ServerMessage::Error { message } => {
-                self.status_message = Some(format!("Server error: {}", message));
+                self.status_message = Some(format!("Server error: {message}"));
             }
         }
     }

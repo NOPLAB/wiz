@@ -1,18 +1,8 @@
-use futures_util::{SinkExt, StreamExt};
+use ewebsock::{WsEvent as EwebsockEvent, WsMessage, WsReceiver, WsSender};
 use parking_lot::Mutex;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use wiz_protocol::{ClientMessage, ServerMessage, decode_server_message, encode_client_message};
-
-/// Connection command sent from UI to background task
-#[derive(Debug)]
-pub enum WsCommand {
-    Connect(String),
-    Disconnect,
-    Send(ClientMessage),
-}
 
 /// Connection state
 #[derive(Debug, Clone, PartialEq)]
@@ -23,7 +13,7 @@ pub enum ConnectionState {
     Error(String),
 }
 
-/// Event received from background task
+/// Event received from WebSocket
 #[derive(Debug)]
 pub enum WsEvent {
     Connected,
@@ -32,48 +22,91 @@ pub enum WsEvent {
     Error(String),
 }
 
+/// Shared connection state
+struct ConnectionInner {
+    state: ConnectionState,
+    sender: Option<WsSender>,
+    receiver: Option<WsReceiver>,
+    pending_events: Vec<WsEvent>,
+}
+
 /// WebSocket client handle for use from GUI
+/// Uses ewebsock which works on both native and WASM
 pub struct WsClientHandle {
-    command_tx: mpsc::UnboundedSender<WsCommand>,
-    event_rx: Arc<Mutex<mpsc::UnboundedReceiver<WsEvent>>>,
-    state: Arc<Mutex<ConnectionState>>,
+    inner: Arc<Mutex<ConnectionInner>>,
 }
 
 impl WsClientHandle {
     /// Create a new WebSocket client handle
-    /// This spawns a background task that manages the connection
     pub fn new() -> Self {
-        let (command_tx, command_rx) = mpsc::unbounded_channel();
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
-        let state = Arc::new(Mutex::new(ConnectionState::Disconnected));
-
-        // Spawn background task
-        let state_clone = state.clone();
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
-            rt.block_on(ws_background_task(command_rx, event_tx, state_clone));
-        });
-
         Self {
-            command_tx,
-            event_rx: Arc::new(Mutex::new(event_rx)),
-            state,
+            inner: Arc::new(Mutex::new(ConnectionInner {
+                state: ConnectionState::Disconnected,
+                sender: None,
+                receiver: None,
+                pending_events: Vec::new(),
+            })),
         }
     }
 
     /// Connect to the WebSocket server
     pub fn connect(&self, url: &str) {
-        let _ = self.command_tx.send(WsCommand::Connect(url.to_string()));
+        info!("Connecting to {}", url);
+
+        let mut inner = self.inner.lock();
+        inner.state = ConnectionState::Connecting;
+
+        // Close existing connection if any
+        if let Some(mut sender) = inner.sender.take() {
+            sender.close();
+        }
+        inner.receiver = None;
+
+        match ewebsock::connect(url, ewebsock::Options::default()) {
+            Ok((sender, receiver)) => {
+                inner.sender = Some(sender);
+                inner.receiver = Some(receiver);
+                // Note: actual Connected state will be set when we receive WsEvent::Opened
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                error!("Failed to connect: {}", error_msg);
+                inner.state = ConnectionState::Error(error_msg.clone());
+                inner.pending_events.push(WsEvent::Error(error_msg));
+            }
+        }
     }
 
     /// Disconnect from the WebSocket server
     pub fn disconnect(&self) {
-        let _ = self.command_tx.send(WsCommand::Disconnect);
+        info!("Disconnecting");
+        let mut inner = self.inner.lock();
+
+        if let Some(mut sender) = inner.sender.take() {
+            sender.close();
+        }
+        inner.receiver = None;
+        inner.state = ConnectionState::Disconnected;
+        inner.pending_events.push(WsEvent::Disconnected);
     }
 
     /// Send a client message
     pub fn send(&self, msg: ClientMessage) {
-        let _ = self.command_tx.send(WsCommand::Send(msg));
+        let mut inner = self.inner.lock();
+
+        if let Some(ref mut sender) = inner.sender {
+            match encode_client_message(&msg) {
+                Ok(data) => {
+                    debug!("Sending message: {:?}", msg);
+                    sender.send(WsMessage::Binary(data));
+                }
+                Err(e) => {
+                    error!("Failed to encode message: {}", e);
+                }
+            }
+        } else {
+            warn!("Cannot send message: not connected");
+        }
     }
 
     /// Subscribe to a topic
@@ -105,24 +138,76 @@ impl WsClientHandle {
     }
 
     /// Poll for events (non-blocking)
+    /// This should be called every frame to process incoming messages
     pub fn poll_events(&self) -> Vec<WsEvent> {
-        let mut events = Vec::new();
-        let mut rx = self.event_rx.lock();
-        while let Ok(event) = rx.try_recv() {
-            events.push(event);
+        let mut inner = self.inner.lock();
+        let mut events = std::mem::take(&mut inner.pending_events);
+
+        // Take the receiver temporarily to avoid borrow conflicts
+        if let Some(receiver) = inner.receiver.take() {
+            // Collect all incoming events
+            let mut received_events = Vec::new();
+            while let Some(event) = receiver.try_recv() {
+                received_events.push(event);
+            }
+
+            // Put the receiver back
+            inner.receiver = Some(receiver);
+
+            // Process the collected events
+            for event in received_events {
+                match event {
+                    EwebsockEvent::Opened => {
+                        info!("WebSocket connected");
+                        inner.state = ConnectionState::Connected;
+                        events.push(WsEvent::Connected);
+                    }
+                    EwebsockEvent::Message(WsMessage::Binary(data)) => {
+                        match decode_server_message(&data) {
+                            Ok(server_msg) => {
+                                events.push(WsEvent::Message(server_msg));
+                            }
+                            Err(e) => {
+                                warn!("Failed to decode server message: {}", e);
+                            }
+                        }
+                    }
+                    EwebsockEvent::Message(WsMessage::Text(text)) => {
+                        debug!("Received text message (ignoring): {}", text);
+                    }
+                    EwebsockEvent::Message(WsMessage::Ping(_) | WsMessage::Pong(_)) => {
+                        // Ping/pong handled by library
+                    }
+                    EwebsockEvent::Message(WsMessage::Unknown(_)) => {
+                        warn!("Received unknown message type");
+                    }
+                    EwebsockEvent::Error(e) => {
+                        error!("WebSocket error: {}", e);
+                        inner.state = ConnectionState::Error(e.clone());
+                        events.push(WsEvent::Error(e));
+                    }
+                    EwebsockEvent::Closed => {
+                        info!("WebSocket closed");
+                        inner.state = ConnectionState::Disconnected;
+                        inner.sender = None;
+                        events.push(WsEvent::Disconnected);
+                    }
+                }
+            }
         }
+
         events
     }
 
     /// Get current connection state
     pub fn state(&self) -> ConnectionState {
-        self.state.lock().clone()
+        self.inner.lock().state.clone()
     }
 
     /// Check if connected
     #[allow(dead_code)]
     pub fn is_connected(&self) -> bool {
-        matches!(*self.state.lock(), ConnectionState::Connected)
+        matches!(self.inner.lock().state, ConnectionState::Connected)
     }
 }
 
@@ -130,104 +215,4 @@ impl Default for WsClientHandle {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Background task that manages the WebSocket connection
-async fn ws_background_task(
-    mut command_rx: mpsc::UnboundedReceiver<WsCommand>,
-    event_tx: mpsc::UnboundedSender<WsEvent>,
-    state: Arc<Mutex<ConnectionState>>,
-) {
-    let mut ws_tx: Option<mpsc::UnboundedSender<ClientMessage>> = None;
-
-    loop {
-        tokio::select! {
-            Some(cmd) = command_rx.recv() => {
-                match cmd {
-                    WsCommand::Connect(url) => {
-                        info!("Connecting to {}", url);
-                        *state.lock() = ConnectionState::Connecting;
-
-                        match connect_to_server(&url, event_tx.clone()).await {
-                            Ok(tx) => {
-                                ws_tx = Some(tx);
-                                *state.lock() = ConnectionState::Connected;
-                                let _ = event_tx.send(WsEvent::Connected);
-                                info!("Connected to {}", url);
-                            }
-                            Err(e) => {
-                                let error_msg = e.to_string();
-                                *state.lock() = ConnectionState::Error(error_msg.clone());
-                                let _ = event_tx.send(WsEvent::Error(error_msg));
-                                error!("Failed to connect: {}", e);
-                            }
-                        }
-                    }
-                    WsCommand::Disconnect => {
-                        info!("Disconnecting");
-                        ws_tx = None;
-                        *state.lock() = ConnectionState::Disconnected;
-                        let _ = event_tx.send(WsEvent::Disconnected);
-                    }
-                    WsCommand::Send(msg) => {
-                        if let Some(ref tx) = ws_tx {
-                            debug!("Sending message: {:?}", msg);
-                            let _ = tx.send(msg);
-                        }
-                    }
-                }
-            }
-            else => break,
-        }
-    }
-}
-
-async fn connect_to_server(
-    url: &str,
-    event_tx: mpsc::UnboundedSender<WsEvent>,
-) -> Result<mpsc::UnboundedSender<ClientMessage>, String> {
-    let (ws_stream, _) = connect_async(url)
-        .await
-        .map_err(|e| format!("Failed to connect: {}", e))?;
-
-    let (mut write, mut read) = ws_stream.split();
-
-    let (client_tx, mut client_rx) = mpsc::unbounded_channel::<ClientMessage>();
-
-    // Task to send messages to server
-    tokio::spawn(async move {
-        while let Some(msg) = client_rx.recv().await {
-            if let Ok(data) = encode_client_message(&msg)
-                && write.send(Message::Binary(data.into())).await.is_err()
-            {
-                break;
-            }
-        }
-    });
-
-    // Task to receive messages from server
-    tokio::spawn(async move {
-        while let Some(msg_result) = read.next().await {
-            match msg_result {
-                Ok(Message::Binary(data)) => {
-                    if let Ok(server_msg) = decode_server_message(&data)
-                        && event_tx.send(WsEvent::Message(server_msg)).is_err()
-                    {
-                        break;
-                    }
-                }
-                Ok(Message::Close(_)) => {
-                    let _ = event_tx.send(WsEvent::Disconnected);
-                    break;
-                }
-                Err(e) => {
-                    let _ = event_tx.send(WsEvent::Error(e.to_string()));
-                    break;
-                }
-                _ => {}
-            }
-        }
-    });
-
-    Ok(client_tx)
 }

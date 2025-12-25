@@ -11,17 +11,18 @@ members = [
 [workspace.dependencies]
 # Graphics
 # Note: wgpu version must match eframe's internal wgpu version
-wgpu = "22.1"
-egui = "0.29"
-eframe = "0.29"
-egui_dock = "0.14"
-egui-wgpu = "0.29"
+wgpu = "23.0"
+egui = "0.30"
+eframe = { version = "0.30", default-features = false, features = ["wgpu", "default_fonts", "persistence", "x11", "wayland"] }
+egui_dock = "0.15"
+egui-wgpu = "0.30"
 
 # Async
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.8", features = ["ws"] }
 tokio-tungstenite = "0.26"
 futures-util = "0.3"
+ewebsock = "0.8"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -41,9 +42,16 @@ bytemuck = { version = "1", features = ["derive"] }
 # Utilities
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-web = "0.1"
 thiserror = "2"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "js"] }
 parking_lot = "0.12"
+
+# WASM
+wasm-bindgen = "=0.2.99"
+wasm-bindgen-futures = "=0.4.49"
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlCanvasElement"] }
+console_error_panic_hook = "0.1"
 
 [workspace.package]
 version = "0.1.0"

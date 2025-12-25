@@ -16,9 +16,9 @@ fn main() {
     {
         // Find ROS2 installation
         if let Ok(ros_distro) = std::env::var("ROS_DISTRO") {
-            let ros_root = format!("/opt/ros/{}", ros_distro);
+            let ros_root = format!("/opt/ros/{ros_distro}");
 
-            println!("cargo:rustc-link-search=native={}/lib", ros_root);
+            println!("cargo:rustc-link-search=native={ros_root}/lib");
 
             // Core ROS2 libraries
             println!("cargo:rustc-link-lib=rclcpp");
@@ -37,7 +37,7 @@ fn main() {
             println!("cargo:rustc-link-lib=tf2");
 
             // Add include paths
-            println!("cargo:rustc-env=CXXFLAGS=-I{}/include", ros_root);
+            println!("cargo:rustc-env=CXXFLAGS=-I{ros_root}/include");
 
             // Define ROS2 enabled macro
             println!("cargo:rustc-cfg=ros2");

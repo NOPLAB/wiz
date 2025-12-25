@@ -1,4 +1,6 @@
 /target
+/crates/wiz-frontend/dist
+
 node_modules/
 
 devel/

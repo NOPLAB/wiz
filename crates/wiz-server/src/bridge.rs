@@ -176,8 +176,7 @@ impl Ros2Bridge {
             })
         } else {
             Err(format!(
-                "Transform from {} to {} not available",
-                source_frame, target_frame
+                "Transform from {source_frame} to {target_frame} not available"
             ))
         }
     }

@@ -1,3 +1,4 @@
+use glam::Mat4;
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -5,6 +6,7 @@ use crate::{
     grid::GridRenderer,
     laser_scan::{LaserScanData, LaserScanRenderer, LaserScanVertex},
     point_cloud::{PointCloudData, PointCloudRenderer, PointVertex},
+    tf_axis::TfAxisRenderer,
 };
 
 pub struct Renderer {
@@ -16,8 +18,10 @@ pub struct Renderer {
     grid_renderer: GridRenderer,
     point_cloud_renderer: PointCloudRenderer,
     laser_scan_renderer: LaserScanRenderer,
+    tf_axis_renderer: TfAxisRenderer,
     point_clouds: Vec<PointCloudData>,
     laser_scans: Vec<LaserScanData>,
+    show_tf_frames: bool,
     format: wgpu::TextureFormat,
     width: u32,
     height: u32,
@@ -82,6 +86,14 @@ impl Renderer {
             &camera_buffer,
         );
 
+        let tf_axis_renderer = TfAxisRenderer::new(
+            device,
+            format,
+            depth_format,
+            &camera_bind_group_layout,
+            &camera_buffer,
+        );
+
         Self {
             camera,
             camera_buffer,
@@ -91,8 +103,10 @@ impl Renderer {
             grid_renderer,
             point_cloud_renderer,
             laser_scan_renderer,
+            tf_axis_renderer,
             point_clouds: Vec::new(),
             laser_scans: Vec::new(),
+            show_tf_frames: true,
             format,
             width,
             height,
@@ -216,6 +230,26 @@ impl Renderer {
         self.laser_scan_renderer.set_show_points(show);
     }
 
+    /// Update TF frame transforms
+    pub fn update_tf_frames(&mut self, queue: &wgpu::Queue, transforms: &[Mat4]) {
+        self.tf_axis_renderer.update_frames(queue, transforms);
+    }
+
+    /// Set TF axis length
+    pub fn set_tf_axis_length(&mut self, length: f32) {
+        self.tf_axis_renderer.set_axis_length(length);
+    }
+
+    /// Toggle TF frame visibility
+    pub fn set_show_tf_frames(&mut self, show: bool) {
+        self.show_tf_frames = show;
+    }
+
+    /// Get TF frame visibility
+    pub fn show_tf_frames(&self) -> bool {
+        self.show_tf_frames
+    }
+
     pub fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -225,6 +259,7 @@ impl Renderer {
         self.update_camera(queue);
         self.point_cloud_renderer.update_settings(queue);
         self.laser_scan_renderer.update_settings(queue);
+        self.tf_axis_renderer.update_settings(queue);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Main Render Pass"),
@@ -266,6 +301,11 @@ impl Renderer {
         for ls in &self.laser_scans {
             self.laser_scan_renderer
                 .render(&mut render_pass, &ls.vertex_buffer, ls.vertex_count);
+        }
+
+        // Render TF frames
+        if self.show_tf_frames {
+            self.tf_axis_renderer.render(&mut render_pass);
         }
     }
 

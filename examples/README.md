@@ -1,127 +1,127 @@
-# wiz Examples
+# wiz サンプル
 
-This directory contains examples and scripts for testing wiz.
+このディレクトリには、wizをテストするためのサンプルとスクリプトが含まれています。
 
-## Quick Start
+## クイックスタート
 
-### Option 1: Mock Data (No ROS2 Required)
+### オプション1: モックデータ（ROS2不要）
 
-The server includes a built-in mock data generator that produces simulated sensor data.
+サーバーにはシミュレートされたセンサーデータを生成するモックデータジェネレーターが組み込まれています。
 
-1. **Start the server:**
+1. **サーバーを起動:**
    ```bash
    ./scripts/run-demo.sh
    ```
-   Or manually:
+   または手動で:
    ```bash
    cargo run -p wiz-server
    ```
 
-2. **Start the frontend (in another terminal):**
+2. **フロントエンドを起動（別のターミナルで）:**
    ```bash
    cargo run -p wiz-frontend
    ```
 
-3. **Connect and subscribe:**
-   - The frontend will show a connection dialog
-   - Connect to `ws://localhost:9090/ws`
-   - Use the Topics panel to subscribe to topics
-   - Watch the 3D viewport for visualized data
+3. **接続してサブスクライブ:**
+   - フロントエンドに接続ダイアログが表示されます
+   - `ws://localhost:9090/ws` に接続
+   - Topicsパネルでトピックをサブスクライブ
+   - 3Dビューポートでデータが可視化されます
 
-### Option 2: Docker with ROS2 (Full ROS2 Integration)
+### オプション2: DockerでROS2連携（フルROS2統合）
 
-Use Docker to run a complete ROS2 environment with sample publishers.
+Dockerを使用して、サンプルパブリッシャーを含む完全なROS2環境を実行します。
 
-1. **Start the Docker services:**
+1. **Dockerサービスを起動:**
    ```bash
    ./scripts/run-ros2-example.sh
    ```
 
-   This will start:
-   - `ros2-example`: ROS2 node publishing sample sensor data
-   - `wiz-server-humble`: wiz server with ROS2 bridge
+   以下のサービスが起動します:
+   - `ros2-example`: サンプルセンサーデータをパブリッシュするROS2ノード
+   - `wiz-server-humble`: ROS2ブリッジ付きのwizサーバー
 
-2. **Start the frontend locally:**
+2. **フロントエンドをローカルで起動:**
    ```bash
    cargo run -p wiz-frontend
    ```
 
-3. **Connect and visualize:**
-   - Connect to `ws://localhost:9090/ws`
-   - Subscribe to `/scan` or `/velodyne_points`
+3. **接続して可視化:**
+   - `ws://localhost:9090/ws` に接続
+   - `/scan` または `/velodyne_points` をサブスクライブ
 
-### Option 3: Connect to Your ROS2 System
+### オプション3: 自分のROS2システムに接続
 
-If you have ROS2 running on your system:
+システム上でROS2が動作している場合:
 
-1. **Build wiz-server with ROS2 support:**
+1. **ROS2サポート付きでwiz-serverをビルド:**
    ```bash
    source /opt/ros/humble/setup.bash
    cargo build --release -p wiz-server --features ros2
    ```
 
-2. **Run the server:**
+2. **サーバーを実行:**
    ```bash
    ./target/release/wiz-server
    ```
 
-3. **Start the frontend and connect.**
+3. **フロントエンドを起動して接続**
 
-## Available Topics
+## 利用可能なトピック
 
-### Mock Data Topics
+### モックデータトピック
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/velodyne_points` | PointCloud2 | Animated 3D spiral point cloud |
-| `/ground_plane` | PointCloud2 | Checkerboard ground plane |
-| `/scan` | LaserScan | 360-degree laser scan with moving obstacles |
-| `/scan_front` | LaserScan | Front-facing laser scan |
+| トピック | 型 | 説明 |
+|----------|------|------|
+| `/velodyne_points` | PointCloud2 | アニメーション付き3Dスパイラル点群 |
+| `/ground_plane` | PointCloud2 | チェッカーボード地面 |
+| `/scan` | LaserScan | 動く障害物を含む360度レーザースキャン |
+| `/scan_front` | LaserScan | 前方向けレーザースキャン |
 
-### ROS2 Example Topics
+### ROS2サンプルトピック
 
-When using the Docker ROS2 example (`ros2-example`):
+Docker ROS2サンプル（`ros2-example`）使用時:
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/velodyne_points` | PointCloud2 | Spiral point cloud |
-| `/scan` | LaserScan | 360-degree scan with obstacles |
+| トピック | 型 | 説明 |
+|----------|------|------|
+| `/velodyne_points` | PointCloud2 | スパイラル点群 |
+| `/scan` | LaserScan | 障害物付き360度スキャン |
 
-## Files
+## ファイル構成
 
-- `ros2_publisher.py` - Python ROS2 node that publishes sample sensor data
-- `../scripts/run-demo.sh` - Run server with mock data
-- `../scripts/run-ros2-example.sh` - Run Docker ROS2 example
-- `../scripts/run-server.sh` - Run server only
-- `../scripts/run-frontend.sh` - Run frontend only
+- `ros2_publisher.py` - サンプルセンサーデータをパブリッシュするPython ROS2ノード
+- `../scripts/run-demo.sh` - モックデータでサーバーを実行
+- `../scripts/run-ros2-example.sh` - Docker ROS2サンプルを実行
+- `../scripts/run-server.sh` - サーバーのみ実行
+- `../scripts/run-frontend.sh` - フロントエンドのみ実行
 
-## Docker Commands
+## Dockerコマンド
 
-Build images:
+イメージをビルド:
 ```bash
 docker-compose build
 ```
 
-Run ROS2 example:
+ROS2サンプルを実行:
 ```bash
 docker-compose --profile example up ros2-example wiz-server-humble
 ```
 
-Run only wiz-server (when using external ROS2):
+wiz-serverのみを実行（外部ROS2使用時）:
 ```bash
 docker-compose up wiz-server-humble
 ```
 
-## Troubleshooting
+## トラブルシューティング
 
-### Connection refused
-- Make sure the server is running on port 9090
-- Check if another process is using the port: `lsof -i :9090`
+### 接続拒否
+- サーバーがポート9090で動作していることを確認
+- 他のプロセスがポートを使用していないか確認: `lsof -i :9090`
 
-### No data received
-- Ensure you've subscribed to a topic in the Topics panel
-- Check server logs for subscription confirmations
+### データが受信されない
+- Topicsパネルでトピックをサブスクライブしたことを確認
+- サーバーログでサブスクリプション確認メッセージを確認
 
-### Docker networking issues
-- Use `--net=host` for direct ROS2 DDS communication
-- Set `ROS_DOMAIN_ID` environment variable if needed
+### Dockerネットワークの問題
+- ROS2 DDS通信には `--net=host` を使用
+- 必要に応じて `ROS_DOMAIN_ID` 環境変数を設定

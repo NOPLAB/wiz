@@ -432,7 +432,7 @@ axis_length = 0.5
 ### Phase 2: Core Features
 可視化機能の拡充
 
-- [ ] TFフレーム表示 (座標軸)
+- [x] TFフレーム表示 (座標軸)
 - [ ] Marker/MarkerArray
 - [ ] Path表示
 - [ ] PoseStamped表示

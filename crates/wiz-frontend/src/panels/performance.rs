@@ -1,9 +1,10 @@
 use crate::panels::Panel;
 use std::collections::VecDeque;
+use web_time::Instant;
 
 pub struct PerformancePanel {
     fps_history: VecDeque<f32>,
-    last_frame_time: std::time::Instant,
+    last_frame_time: Instant,
     frame_times: VecDeque<f32>,
     point_count: usize,
     triangle_count: usize,
@@ -18,7 +19,7 @@ impl PerformancePanel {
     pub fn new() -> Self {
         Self {
             fps_history: VecDeque::with_capacity(120),
-            last_frame_time: std::time::Instant::now(),
+            last_frame_time: Instant::now(),
             frame_times: VecDeque::with_capacity(60),
             point_count: 0,
             triangle_count: 0,
@@ -31,7 +32,7 @@ impl PerformancePanel {
     }
 
     pub fn update(&mut self) {
-        let now = std::time::Instant::now();
+        let now = Instant::now();
         let dt = now.duration_since(self.last_frame_time).as_secs_f32();
         self.last_frame_time = now;
 

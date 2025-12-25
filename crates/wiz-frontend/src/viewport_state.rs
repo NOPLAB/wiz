@@ -1,5 +1,7 @@
+use glam::Mat4;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use wiz_core::Transform3D;
 use wiz_renderer::{Renderer, laser_scan::LaserScanVertex, point_cloud::PointVertex};
 
 /// Shared viewport rendering state
@@ -162,6 +164,60 @@ impl ViewportState {
 
         self.renderer.set_laser_scan_color(1.0, 0.3, 0.3, 1.0);
         self.renderer.add_laser_scan(&self.device, &vertices);
+    }
+
+    /// Update TF frames from transforms
+    #[allow(dead_code)]
+    pub fn update_tf_frames(&mut self, transforms: &[Transform3D]) {
+        let matrices: Vec<Mat4> = transforms.iter().map(|t| t.to_mat4()).collect();
+        self.renderer.update_tf_frames(&self.queue, &matrices);
+    }
+
+    /// Update TF frames from Mat4 matrices
+    #[allow(dead_code)]
+    pub fn update_tf_frames_mat4(&mut self, transforms: &[Mat4]) {
+        self.renderer.update_tf_frames(&self.queue, transforms);
+    }
+
+    /// Set TF frame visibility
+    pub fn set_show_tf_frames(&mut self, show: bool) {
+        self.renderer.set_show_tf_frames(show);
+    }
+
+    /// Get TF frame visibility
+    #[allow(dead_code)]
+    pub fn show_tf_frames(&self) -> bool {
+        self.renderer.show_tf_frames()
+    }
+
+    /// Set TF axis length
+    #[allow(dead_code)]
+    pub fn set_tf_axis_length(&mut self, length: f32) {
+        self.renderer.set_tf_axis_length(length);
+    }
+
+    /// Add sample TF frames for testing
+    pub fn add_sample_tf_frames(&mut self) {
+        use glam::{Quat, Vec3};
+
+        let frames = vec![
+            // Origin frame
+            Mat4::IDENTITY,
+            // Frame at (1, 0, 0) rotated 45 degrees around Z
+            Mat4::from_rotation_translation(
+                Quat::from_rotation_z(std::f32::consts::FRAC_PI_4),
+                Vec3::new(1.0, 0.0, 0.0),
+            ),
+            // Frame at (0, 2, 0) rotated 90 degrees around X
+            Mat4::from_rotation_translation(
+                Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+                Vec3::new(0.0, 2.0, 0.0),
+            ),
+            // Frame at (1, 1, 1)
+            Mat4::from_translation(Vec3::new(1.0, 1.0, 1.0)),
+        ];
+
+        self.renderer.update_tf_frames(&self.queue, &frames);
     }
 }
 
