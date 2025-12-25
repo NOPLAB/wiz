@@ -4,7 +4,7 @@
 //! to allow testing the visualization without a real ROS2 environment.
 
 use std::f32::consts::PI;
-use wiz_core::{Header, LaserScan, PointCloud2, PointField, PointFieldType};
+use wiz_core::{Header, LaserScan, PointCloud2, PointField, PointFieldType, Pose, PoseStamped};
 
 /// Mock data generator with time-varying data
 pub struct MockDataGenerator {
@@ -221,6 +221,40 @@ impl MockDataGenerator {
             row_step: point_step * num_points as u32,
             data,
             is_dense: true,
+        }
+    }
+
+    /// Generate a mock PoseStamped representing a moving robot
+    pub fn generate_pose(&self, _topic: &str) -> PoseStamped {
+        let time_factor = self.tick as f32 * 0.02;
+
+        // Robot moves in a figure-8 pattern
+        let t = time_factor * 0.5;
+        let x = 3.0 * (t).sin();
+        let y = 1.5 * (2.0 * t).sin();
+        let z = 0.0;
+
+        // Orientation follows the movement direction
+        let dx = 3.0 * t.cos();
+        let dy = 3.0 * (2.0 * t).cos();
+        let yaw = dy.atan2(dx);
+
+        // Convert yaw to quaternion (rotation around Z axis)
+        let half_yaw = yaw / 2.0;
+        let qx = 0.0;
+        let qy = 0.0;
+        let qz = half_yaw.sin();
+        let qw = half_yaw.cos();
+
+        PoseStamped {
+            header: Header {
+                stamp: self.timestamp(),
+                frame_id: "map".to_string(),
+            },
+            pose: Pose {
+                position: [x as f64, y as f64, z],
+                orientation: [qx, qy, qz as f64, qw as f64],
+            },
         }
     }
 }

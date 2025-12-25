@@ -1,3 +1,4 @@
+use crate::app_state::SharedAppState;
 use crate::panels::Panel;
 
 #[derive(Debug, Clone)]
@@ -20,10 +21,20 @@ pub struct Display {
     pub point_size: f32,
     pub alpha: f32,
     pub color: [f32; 4],
+    pub subscription_id: u32,
+    /// Arrow length for Pose displays
+    pub arrow_length: f32,
+    /// Arrow width for Pose displays
+    pub arrow_width: f32,
 }
 
 impl Display {
-    pub fn new(display_type: DisplayType, topic: String) -> Self {
+    pub fn new(display_type: DisplayType, topic: String, subscription_id: u32) -> Self {
+        let (color, arrow_length, arrow_width) = match display_type {
+            DisplayType::Pose => ([1.0, 0.0, 0.5, 1.0], 1.0, 0.1), // Magenta
+            DisplayType::LaserScan => ([1.0, 0.3, 0.3, 1.0], 1.0, 0.1), // Red
+            _ => ([1.0, 0.0, 0.0, 1.0], 1.0, 0.1),
+        };
         Self {
             display_type,
             topic,
@@ -31,28 +42,21 @@ impl Display {
             expanded: true,
             point_size: 2.0,
             alpha: 1.0,
-            color: [1.0, 0.0, 0.0, 1.0],
+            color,
+            subscription_id,
+            arrow_length,
+            arrow_width,
         }
     }
 }
 
 pub struct DisplaysPanel {
-    displays: Vec<Display>,
+    app_state: SharedAppState,
 }
 
 impl DisplaysPanel {
-    pub fn new() -> Self {
-        Self {
-            displays: vec![
-                Display::new(DisplayType::PointCloud2, "/velodyne_points".to_string()),
-                Display::new(DisplayType::LaserScan, "/scan".to_string()),
-            ],
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn add_display(&mut self, display: Display) {
-        self.displays.push(display);
+    pub fn new(app_state: SharedAppState) -> Self {
+        Self { app_state }
     }
 }
 
@@ -62,10 +66,24 @@ impl Panel for DisplaysPanel {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            let mut to_remove = None;
+        let mut to_remove = None;
 
-            for (i, display) in self.displays.iter_mut().enumerate() {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            let mut state = self.app_state.lock();
+
+            if state.displays.is_empty() {
+                ui.label("No topic displays added.");
+                ui.separator();
+                ui.label("To add a display:");
+                ui.label("1. Connect to server");
+                ui.label("2. Select a topic from Topics panel");
+                ui.label("3. Double-click or use menu below");
+                ui.separator();
+                ui.label("Note: Grid and TF axes are");
+                ui.label("controlled via toolbar settings.");
+            }
+
+            for (i, display) in state.displays.iter_mut().enumerate() {
                 let type_name = match display.display_type {
                     DisplayType::PointCloud2 => "PointCloud2",
                     DisplayType::LaserScan => "LaserScan",
@@ -127,6 +145,45 @@ impl Panel for DisplaysPanel {
                                         }
                                     });
                                 }
+                                DisplayType::Pose => {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Color:");
+                                        let mut color = egui::Color32::from_rgba_unmultiplied(
+                                            (display.color[0] * 255.0) as u8,
+                                            (display.color[1] * 255.0) as u8,
+                                            (display.color[2] * 255.0) as u8,
+                                            (display.color[3] * 255.0) as u8,
+                                        );
+                                        if egui::color_picker::color_edit_button_srgba(
+                                            ui,
+                                            &mut color,
+                                            egui::color_picker::Alpha::Opaque,
+                                        )
+                                        .changed()
+                                        {
+                                            display.color = [
+                                                color.r() as f32 / 255.0,
+                                                color.g() as f32 / 255.0,
+                                                color.b() as f32 / 255.0,
+                                                color.a() as f32 / 255.0,
+                                            ];
+                                        }
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Length:");
+                                        ui.add(egui::Slider::new(
+                                            &mut display.arrow_length,
+                                            0.1..=5.0,
+                                        ));
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Width:");
+                                        ui.add(egui::Slider::new(
+                                            &mut display.arrow_width,
+                                            0.01..=0.5,
+                                        ));
+                                    });
+                                }
                                 _ => {}
                             }
 
@@ -137,34 +194,34 @@ impl Panel for DisplaysPanel {
 
                 display.expanded = header.fully_open();
             }
-
-            if let Some(i) = to_remove {
-                self.displays.remove(i);
-            }
         });
+
+        // Handle removal outside the lock
+        if let Some(i) = to_remove {
+            self.app_state.lock().remove_display(i);
+        }
 
         ui.separator();
 
+        // Show available topics for adding
+        let topics: Vec<_> = {
+            let state = self.app_state.lock();
+            state.topics.clone()
+        };
+
         ui.menu_button("+ Add Display", |ui| {
-            if ui.button("PointCloud2").clicked() {
-                self.displays
-                    .push(Display::new(DisplayType::PointCloud2, "/topic".to_string()));
-                ui.close_menu();
-            }
-            if ui.button("LaserScan").clicked() {
-                self.displays
-                    .push(Display::new(DisplayType::LaserScan, "/topic".to_string()));
-                ui.close_menu();
-            }
-            if ui.button("TF").clicked() {
-                self.displays
-                    .push(Display::new(DisplayType::TF, "".to_string()));
-                ui.close_menu();
-            }
-            if ui.button("Marker").clicked() {
-                self.displays
-                    .push(Display::new(DisplayType::Marker, "/topic".to_string()));
-                ui.close_menu();
+            if topics.is_empty() {
+                ui.label("No topics available.");
+                ui.label("Connect to server first.");
+            } else {
+                for topic in &topics {
+                    if ui.button(&topic.name).clicked() {
+                        self.app_state
+                            .lock()
+                            .add_display(&topic.name, &topic.msg_type);
+                        ui.close_menu();
+                    }
+                }
             }
         });
     }

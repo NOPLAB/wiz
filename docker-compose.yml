@@ -28,15 +28,20 @@ services:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
 
   # ============================================
-  # Example ROS2 Publisher (for testing)
+  # TurtleBot3 Gazebo Simulation (for testing)
   # ============================================
-  ros2-example:
+  gazebo-turtlebot3:
     build:
       context: .
-      dockerfile: docker/Dockerfile.ros2-example
-    image: wiz-ros2-example
+      dockerfile: docker/Dockerfile.gazebo
+    image: wiz-gazebo:humble
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - DISPLAY=${DISPLAY:-:0}
+      - TURTLEBOT3_MODEL=waffle_pi
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
     profiles:
       - example
 

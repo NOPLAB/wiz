@@ -1,4 +1,5 @@
 mod app;
+mod app_state;
 mod panels;
 mod viewport_state;
 mod ws_client;

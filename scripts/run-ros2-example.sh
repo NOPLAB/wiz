@@ -1,8 +1,8 @@
 #!/bin/bash
-# Run wiz with ROS2 example using Docker
+# Run wiz with TurtleBot3 Gazebo simulation using Docker
 #
 # This script starts:
-# 1. ROS2 example publisher (publishes sample sensor data)
+# 1. TurtleBot3 Gazebo simulation (publishes realistic sensor data)
 # 2. wiz-server with ROS2 bridge (connects to ROS2 network)
 #
 # Then you can run wiz-frontend locally to visualize the data.
@@ -16,7 +16,7 @@ cd "$PROJECT_ROOT"
 
 echo "============================================="
 echo "  wiz - ROS2 Visualization Tool"
-echo "  Docker Example Mode"
+echo "  TurtleBot3 Gazebo Simulation Mode"
 echo "============================================="
 echo ""
 
@@ -38,23 +38,40 @@ else
     COMPOSE_CMD="docker-compose"
 fi
 
-echo "Building Docker images..."
-$COMPOSE_CMD build ros2-example wiz-server-humble
+# X11 setup for Gazebo GUI
+echo "Setting up X11 forwarding for Gazebo..."
+if command -v xhost &> /dev/null; then
+    xhost +local:docker 2>/dev/null || true
+else
+    echo "Warning: xhost not found. Gazebo GUI may not display."
+    echo "Install with: sudo apt install x11-xserver-utils"
+fi
 
 echo ""
-echo "Starting ROS2 example publisher and wiz-server..."
+echo "Building Docker images (this may take a while for Gazebo)..."
+$COMPOSE_CMD build gazebo-turtlebot3 wiz-server-humble
+
+echo ""
+echo "Starting TurtleBot3 Gazebo simulation and wiz-server..."
 echo ""
 echo "The following services will start:"
-echo "  - ros2-example:     Publishes sample LaserScan and PointCloud2"
-echo "  - wiz-server:       WebSocket server with ROS2 bridge"
+echo "  - gazebo-turtlebot3: TurtleBot3 (waffle_pi) in Gazebo world"
+echo "  - wiz-server:        WebSocket server with ROS2 bridge"
+echo ""
+echo "Published topics:"
+echo "  - /scan              (sensor_msgs/LaserScan)"
+echo "  - /odom              (nav_msgs/Odometry)"
+echo "  - /tf                (tf2_msgs/TFMessage)"
+echo "  - /camera/depth/points (sensor_msgs/PointCloud2)"
 echo ""
 echo "After services start, run the frontend locally:"
 echo "  cargo run -p wiz-frontend"
 echo ""
-echo "Or access via browser if using WASM build."
+echo "To control the robot (in another terminal):"
+echo "  docker exec -it \$(docker ps -qf name=gazebo) ros2 run turtlebot3_teleop teleop_keyboard"
 echo ""
 echo "Press Ctrl+C to stop all services."
 echo ""
 
 # Start services
-$COMPOSE_CMD --profile example up ros2-example wiz-server-humble
+$COMPOSE_CMD --profile example up gazebo-turtlebot3 wiz-server-humble

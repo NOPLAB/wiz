@@ -2,40 +2,63 @@ use egui_dock::{DockArea, DockState, NodeIndex, Style};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tracing::info;
-use wiz_core::TopicInfo;
 
+use crate::app_state::{AppAction, AppState, SharedAppState};
 use crate::panels::{
     DisplaysPanel, Panel, PerformancePanel, TfTreePanel, TopicsPanel, ViewportPanel,
 };
 use crate::viewport_state::{SharedViewportState, ViewportState};
 use crate::ws_client::{ConnectionState, WsClientHandle, WsEvent};
 
+/// Tracks which panels are currently visible/open
+struct PanelVisibility {
+    topics: bool,
+    displays: bool,
+    tf_tree: bool,
+    performance: bool,
+}
+
+impl Default for PanelVisibility {
+    fn default() -> Self {
+        Self {
+            topics: true,
+            displays: true,
+            tf_tree: true,
+            performance: true,
+        }
+    }
+}
+
 pub struct WizApp {
     dock_state: DockState<Box<dyn Panel>>,
     ws_client: WsClientHandle,
     connection_url: String,
-    topics: Vec<TopicInfo>,
+    app_state: SharedAppState,
     viewport_state: Option<SharedViewportState>,
     show_grid: bool,
     show_tf_axes: bool,
     fixed_frame: String,
     status_message: Option<String>,
+    /// Panel visibility state
+    panel_visibility: PanelVisibility,
+    /// Show about dialog
+    show_about_dialog: bool,
+    /// Show keyboard shortcuts dialog
+    show_shortcuts_dialog: bool,
 }
 
 impl WizApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Create shared app state
+        let app_state = Arc::new(Mutex::new(AppState::new()));
+
         // Initialize viewport state if wgpu is available
         let viewport_state = cc.wgpu_render_state.as_ref().map(|render_state| {
             let device = render_state.device.clone();
             let queue = render_state.queue.clone();
             let format = render_state.target_format;
 
-            let mut state = ViewportState::new(device, queue, format);
-            // Add sample data for testing
-            state.add_sample_point_cloud();
-            state.add_sample_laser_scan();
-            state.add_sample_tf_frames();
-
+            let state = ViewportState::new(device, queue, format);
             Arc::new(Mutex::new(state))
         });
 
@@ -47,13 +70,13 @@ impl WizApp {
         let [main, _right] = dock_state.main_surface_mut().split_right(
             NodeIndex::root(),
             0.75,
-            vec![Box::new(DisplaysPanel::new()) as Box<dyn Panel>],
+            vec![Box::new(DisplaysPanel::new(app_state.clone())) as Box<dyn Panel>],
         );
 
         let [_left, _main] = dock_state.main_surface_mut().split_left(
             main,
             0.2,
-            vec![Box::new(TopicsPanel::new()) as Box<dyn Panel>],
+            vec![Box::new(TopicsPanel::new(app_state.clone())) as Box<dyn Panel>],
         );
 
         let [_main, _bottom] = dock_state.main_surface_mut().split_below(
@@ -69,13 +92,274 @@ impl WizApp {
             dock_state,
             ws_client: WsClientHandle::new(),
             connection_url: "ws://localhost:9090/ws".to_string(),
-            topics: Vec::new(),
+            app_state,
             viewport_state,
             show_grid: true,
             show_tf_axes: true,
             fixed_frame: "map".to_string(),
             status_message: None,
+            panel_visibility: PanelVisibility::default(),
+            show_about_dialog: false,
+            show_shortcuts_dialog: false,
         }
+    }
+
+    /// Check if a panel with the given name exists in the dock
+    fn has_panel(&self, name: &str) -> bool {
+        for ((_surface_idx, _node_idx), tab) in self.dock_state.iter_all_tabs() {
+            if tab.name() == name {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Add a panel to the dock
+    fn add_panel(&mut self, panel: Box<dyn Panel>) {
+        self.dock_state.push_to_first_leaf(panel);
+    }
+
+    /// Remove a panel from the dock by name
+    fn remove_panel(&mut self, name: &str) {
+        // Use retain_tabs to remove the panel by name
+        self.dock_state.retain_tabs(|tab| tab.name() != name);
+    }
+
+    /// Sync panel visibility state with actual dock state
+    fn sync_panel_visibility(&mut self) {
+        self.panel_visibility.topics = self.has_panel("Topics");
+        self.panel_visibility.displays = self.has_panel("Displays");
+        self.panel_visibility.tf_tree = self.has_panel("TF Tree");
+        self.panel_visibility.performance = self.has_panel("Performance");
+    }
+
+    /// Toggle a panel's visibility
+    fn toggle_panel(&mut self, name: &str, should_be_visible: bool) {
+        let is_visible = self.has_panel(name);
+
+        if should_be_visible && !is_visible {
+            // Add the panel
+            let panel: Box<dyn Panel> = match name {
+                "Topics" => Box::new(TopicsPanel::new(self.app_state.clone())),
+                "Displays" => Box::new(DisplaysPanel::new(self.app_state.clone())),
+                "TF Tree" => Box::new(TfTreePanel::new()),
+                "Performance" => Box::new(PerformancePanel::new()),
+                _ => return,
+            };
+            self.add_panel(panel);
+        } else if !should_be_visible && is_visible {
+            self.remove_panel(name);
+        }
+
+        // Update visibility state
+        match name {
+            "Topics" => self.panel_visibility.topics = should_be_visible,
+            "Displays" => self.panel_visibility.displays = should_be_visible,
+            "TF Tree" => self.panel_visibility.tf_tree = should_be_visible,
+            "Performance" => self.panel_visibility.performance = should_be_visible,
+            _ => {}
+        }
+    }
+
+    /// Show About dialog
+    fn show_about_dialog(ctx: &egui::Context, open: &mut bool) {
+        egui::Window::new("About wiz")
+            .open(open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("wiz");
+                    ui.add_space(8.0);
+                    ui.label("ROS2 Visualization Tool");
+                    ui.add_space(4.0);
+                    ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(8.0);
+                    ui.label("A next-generation visualization tool for ROS2");
+                    ui.label("Built with Rust, WebGPU, and egui");
+                    ui.add_space(8.0);
+                    ui.hyperlink_to("GitHub Repository", "https://github.com/your-repo/wiz");
+                    ui.add_space(8.0);
+                    ui.label("Apache 2.0 / MIT License");
+                });
+            });
+    }
+
+    /// Show Keyboard Shortcuts dialog
+    fn show_shortcuts_dialog(ctx: &egui::Context, open: &mut bool) {
+        egui::Window::new("Keyboard Shortcuts")
+            .open(open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                egui::Grid::new("shortcuts_grid")
+                    .num_columns(2)
+                    .spacing([40.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new("General").strong());
+                        ui.end_row();
+
+                        ui.label("Ctrl+Q");
+                        ui.label("Quit");
+                        ui.end_row();
+
+                        ui.label("Escape");
+                        ui.label("Close dialogs / Deselect");
+                        ui.end_row();
+
+                        ui.label("F11");
+                        ui.label("Toggle Fullscreen");
+                        ui.end_row();
+
+                        ui.add_space(8.0);
+                        ui.end_row();
+
+                        ui.label(egui::RichText::new("View").strong());
+                        ui.end_row();
+
+                        ui.label("G");
+                        ui.label("Toggle Grid");
+                        ui.end_row();
+
+                        ui.label("T");
+                        ui.label("Toggle TF Axes");
+                        ui.end_row();
+
+                        ui.label("Home");
+                        ui.label("Fit All in View");
+                        ui.end_row();
+
+                        ui.add_space(8.0);
+                        ui.end_row();
+
+                        ui.label(egui::RichText::new("Panels").strong());
+                        ui.end_row();
+
+                        ui.label("1");
+                        ui.label("Toggle Topics Panel");
+                        ui.end_row();
+
+                        ui.label("2");
+                        ui.label("Toggle Displays Panel");
+                        ui.end_row();
+
+                        ui.label("3");
+                        ui.label("Toggle TF Tree Panel");
+                        ui.end_row();
+
+                        ui.label("4");
+                        ui.label("Toggle Performance Panel");
+                        ui.end_row();
+                    });
+            });
+    }
+
+    /// Reset to default layout
+    fn reset_layout(&mut self) {
+        // Create viewport panel with shared state
+        let viewport_panel = ViewportPanel::new(self.viewport_state.clone());
+
+        let mut dock_state = DockState::new(vec![Box::new(viewport_panel) as Box<dyn Panel>]);
+
+        let [main, _right] = dock_state.main_surface_mut().split_right(
+            NodeIndex::root(),
+            0.75,
+            vec![Box::new(DisplaysPanel::new(self.app_state.clone())) as Box<dyn Panel>],
+        );
+
+        let [_left, _main] = dock_state.main_surface_mut().split_left(
+            main,
+            0.2,
+            vec![Box::new(TopicsPanel::new(self.app_state.clone())) as Box<dyn Panel>],
+        );
+
+        let [_main, _bottom] = dock_state.main_surface_mut().split_below(
+            main,
+            0.7,
+            vec![
+                Box::new(TfTreePanel::new()) as Box<dyn Panel>,
+                Box::new(PerformancePanel::new()) as Box<dyn Panel>,
+            ],
+        );
+
+        self.dock_state = dock_state;
+        self.panel_visibility = PanelVisibility::default();
+    }
+
+    /// Handle keyboard shortcuts
+    fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
+        ctx.input_mut(|input| {
+            // Ctrl+Q: Quit
+            if input.consume_key(egui::Modifiers::COMMAND, egui::Key::Q) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+
+            // G: Toggle Grid
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::G) {
+                self.show_grid = !self.show_grid;
+            }
+
+            // T: Toggle TF Axes
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::T) {
+                self.show_tf_axes = !self.show_tf_axes;
+                if let Some(ref state) = self.viewport_state {
+                    state.lock().set_show_tf_frames(self.show_tf_axes);
+                }
+            }
+
+            // Home: Fit All in View
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::Home) {
+                if let Some(ref state) = self.viewport_state {
+                    state.lock().renderer.camera.fit_all(glam::Vec3::ZERO, 5.0);
+                }
+            }
+
+            // Escape: Deselect / Close dialogs
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
+                self.show_about_dialog = false;
+                self.show_shortcuts_dialog = false;
+                self.app_state.lock().selected_topic = None;
+            }
+
+            // F11: Toggle Fullscreen
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::F11) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+            }
+
+            // 1: Topics Panel toggle
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::Num1) {
+                let visible = !self.has_panel("Topics");
+                self.toggle_panel("Topics", visible);
+            }
+
+            // 2: Displays Panel toggle
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::Num2) {
+                let visible = !self.has_panel("Displays");
+                self.toggle_panel("Displays", visible);
+            }
+
+            // 3: TF Tree Panel toggle
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::Num3) {
+                let visible = !self.has_panel("TF Tree");
+                self.toggle_panel("TF Tree", visible);
+            }
+
+            // 4: Performance Panel toggle
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::Num4) {
+                let visible = !self.has_panel("Performance");
+                self.toggle_panel("Performance", visible);
+            }
+
+            // R: Reset Layout
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::R) {
+                // Only reset if not typing in a text field
+                // This is handled by input_mut consuming the key
+            }
+        });
     }
 
     fn render_toolbar(&mut self, ui: &mut egui::Ui) {
@@ -138,6 +422,13 @@ impl WizApp {
                 }
             }
 
+            // Topic count
+            let topic_count = self.app_state.lock().topics.len();
+            if topic_count > 0 {
+                ui.separator();
+                ui.label(format!("{topic_count} topics"));
+            }
+
             // Status message
             if let Some(ref msg) = self.status_message {
                 ui.separator();
@@ -154,6 +445,8 @@ impl WizApp {
     fn disconnect(&mut self) {
         info!("Disconnecting");
         self.ws_client.disconnect();
+        // Clear topics on disconnect
+        self.app_state.lock().set_topics(Vec::new());
     }
 
     fn process_ws_events(&mut self) {
@@ -166,7 +459,7 @@ impl WizApp {
                 }
                 WsEvent::Disconnected => {
                     self.status_message = Some("Disconnected".to_string());
-                    self.topics.clear();
+                    self.app_state.lock().set_topics(Vec::new());
                 }
                 WsEvent::Message(msg) => {
                     self.handle_server_message(msg);
@@ -183,7 +476,7 @@ impl WizApp {
         match msg {
             ServerMessage::Topics { topics } => {
                 info!("Received {} topics", topics.len());
-                self.topics = topics;
+                self.app_state.lock().set_topics(topics);
             }
             ServerMessage::Subscribed { id, topic } => {
                 info!("Subscribed to {} (id: {})", topic, id);
@@ -197,7 +490,6 @@ impl WizApp {
                 timestamp,
                 payload,
             } => {
-                // TODO: Handle incoming data (point clouds, laser scans, etc.)
                 info!(
                     "Received data from {} ({}) at {}: {} bytes",
                     topic,
@@ -205,6 +497,7 @@ impl WizApp {
                     timestamp,
                     payload.len()
                 );
+                self.handle_data_message(&topic, &msg_type, &payload);
             }
             ServerMessage::Transform {
                 target_frame,
@@ -218,12 +511,124 @@ impl WizApp {
             }
         }
     }
+
+    fn process_pending_actions(&mut self) {
+        let actions = self.app_state.lock().take_pending_actions();
+        for action in actions {
+            match action {
+                AppAction::Subscribe { topic, msg_type } => {
+                    info!("Subscribing to {} ({})", topic, msg_type);
+                    self.ws_client.subscribe(&topic, &msg_type, None);
+                }
+                AppAction::Unsubscribe { subscription_id } => {
+                    info!("Unsubscribing from subscription {}", subscription_id);
+                    self.ws_client.unsubscribe(subscription_id);
+                }
+                AppAction::RefreshTopics => {
+                    info!("Refreshing topic list");
+                    self.ws_client.list_topics();
+                }
+            }
+        }
+    }
+
+    /// Apply display settings from AppState to ViewportState
+    fn apply_display_settings(&mut self) {
+        let Some(ref viewport_state) = self.viewport_state else {
+            return;
+        };
+
+        let state = self.app_state.lock();
+        let mut viewport = viewport_state.lock();
+
+        // Apply visibility and settings for each display
+        for display in &state.displays {
+            // Sync visibility to ViewportState
+            viewport.set_topic_visibility(&display.topic, display.visible);
+
+            // Apply other settings only for visible displays
+            if !display.visible {
+                continue;
+            }
+            match display.display_type {
+                crate::panels::displays::DisplayType::PointCloud2 => {
+                    viewport.set_point_size(display.point_size);
+                    viewport.set_point_alpha(display.alpha);
+                }
+                crate::panels::displays::DisplayType::LaserScan => {
+                    viewport.set_laser_scan_color(display.color);
+                }
+                crate::panels::displays::DisplayType::Pose => {
+                    viewport.set_pose_color(display.color);
+                    viewport.set_pose_arrow_length(display.arrow_length);
+                    viewport.set_pose_arrow_width(display.arrow_width);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn handle_data_message(&mut self, topic: &str, msg_type: &str, payload: &[u8]) {
+        let Some(ref viewport_state) = self.viewport_state else {
+            return;
+        };
+
+        // Decode payload based on message type
+        if msg_type.contains("PointCloud2") {
+            match rmp_serde::from_slice::<wiz_core::PointCloud2>(payload) {
+                Ok(cloud) => {
+                    tracing::debug!(
+                        "Updating point cloud {} with {} points",
+                        topic,
+                        cloud.point_count()
+                    );
+                    viewport_state.lock().update_point_cloud(topic, &cloud);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode PointCloud2: {}", e);
+                }
+            }
+        } else if msg_type.contains("LaserScan") {
+            match rmp_serde::from_slice::<wiz_core::LaserScan>(payload) {
+                Ok(scan) => {
+                    tracing::debug!(
+                        "Updating laser scan {} with {} ranges",
+                        topic,
+                        scan.ranges.len()
+                    );
+                    viewport_state.lock().update_laser_scan(topic, &scan);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode LaserScan: {}", e);
+                }
+            }
+        } else if msg_type.contains("PoseStamped") {
+            match rmp_serde::from_slice::<wiz_core::PoseStamped>(payload) {
+                Ok(pose) => {
+                    tracing::debug!("Updating pose {} at {:?}", topic, pose.pose.position);
+                    viewport_state.lock().update_pose(topic, &pose);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode PoseStamped: {}", e);
+                }
+            }
+        }
+    }
 }
 
 impl eframe::App for WizApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Process WebSocket events
         self.process_ws_events();
+
+        // Process pending actions from UI
+        self.process_pending_actions();
+
+        // Apply display settings to renderer
+        self.apply_display_settings();
+
+        // Handle keyboard shortcuts
+        self.handle_keyboard_shortcuts(ctx);
 
         // Menu bar
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
@@ -239,9 +644,14 @@ impl eframe::App for WizApp {
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.button("Exit").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
+                    ui.horizontal(|ui| {
+                        if ui.button("Exit").clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(egui::RichText::new("Ctrl+Q").weak());
+                        });
+                    });
                 });
 
                 ui.menu_button("Edit", |ui| {
@@ -251,20 +661,56 @@ impl eframe::App for WizApp {
                 });
 
                 ui.menu_button("View", |ui| {
-                    if ui.button("Topics Panel").clicked() {
-                        ui.close_menu();
-                    }
-                    if ui.button("Displays Panel").clicked() {
-                        ui.close_menu();
-                    }
-                    if ui.button("TF Tree Panel").clicked() {
-                        ui.close_menu();
-                    }
-                    if ui.button("Performance Panel").clicked() {
-                        ui.close_menu();
-                    }
+                    // Sync visibility state with actual dock state
+                    self.sync_panel_visibility();
+
+                    let mut topics_visible = self.panel_visibility.topics;
+                    let mut displays_visible = self.panel_visibility.displays;
+                    let mut tf_tree_visible = self.panel_visibility.tf_tree;
+                    let mut performance_visible = self.panel_visibility.performance;
+
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(&mut topics_visible, "Topics Panel").clicked() {
+                            self.toggle_panel("Topics", topics_visible);
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(egui::RichText::new("1").weak());
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        if ui
+                            .checkbox(&mut displays_visible, "Displays Panel")
+                            .clicked()
+                        {
+                            self.toggle_panel("Displays", displays_visible);
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(egui::RichText::new("2").weak());
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(&mut tf_tree_visible, "TF Tree Panel").clicked() {
+                            self.toggle_panel("TF Tree", tf_tree_visible);
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(egui::RichText::new("3").weak());
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        if ui
+                            .checkbox(&mut performance_visible, "Performance Panel")
+                            .clicked()
+                        {
+                            self.toggle_panel("Performance", performance_visible);
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(egui::RichText::new("4").weak());
+                        });
+                    });
                     ui.separator();
                     if ui.button("Reset Layout").clicked() {
+                        // Reset to default layout
+                        self.reset_layout();
                         ui.close_menu();
                     }
                     ui.separator();
@@ -301,9 +747,11 @@ impl eframe::App for WizApp {
 
                 ui.menu_button("Help", |ui| {
                     if ui.button("Keyboard Shortcuts").clicked() {
+                        self.show_shortcuts_dialog = true;
                         ui.close_menu();
                     }
                     if ui.button("About wiz").clicked() {
+                        self.show_about_dialog = true;
                         ui.close_menu();
                     }
                 });
@@ -328,6 +776,14 @@ impl eframe::App for WizApp {
                 .style(Style::from_egui(ui.style().as_ref()))
                 .show_inside(ui, &mut tab_viewer);
         });
+
+        // Show dialogs if requested
+        if self.show_about_dialog {
+            Self::show_about_dialog(ctx, &mut self.show_about_dialog);
+        }
+        if self.show_shortcuts_dialog {
+            Self::show_shortcuts_dialog(ctx, &mut self.show_shortcuts_dialog);
+        }
 
         // Request continuous repaint for smooth rendering
         ctx.request_repaint();

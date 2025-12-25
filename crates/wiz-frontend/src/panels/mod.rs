@@ -1,4 +1,4 @@
-mod displays;
+pub mod displays;
 mod performance;
 mod tf_tree;
 mod topics;

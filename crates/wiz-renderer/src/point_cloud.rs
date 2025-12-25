@@ -89,7 +89,7 @@ impl PointCloudRenderer {
             .shader(&shader)
             .vertex_layout(wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<PointVertex>() as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
+                step_mode: wgpu::VertexStepMode::Instance, // Each point is an instance
                 attributes: &[
                     wgpu::VertexAttribute {
                         offset: 0,
@@ -107,7 +107,7 @@ impl PointCloudRenderer {
             .bind_group_layout(&settings_bind_group_layout)
             .format(format)
             .depth_format(depth_format)
-            .topology(wgpu::PrimitiveTopology::PointList)
+            .topology(wgpu::PrimitiveTopology::TriangleList) // Draw quads as triangles
             .label("Point Cloud Pipeline")
             .build();
 
@@ -142,13 +142,14 @@ impl PointCloudRenderer {
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
         vertex_buffer: &'a wgpu::Buffer,
-        vertex_count: u32,
+        instance_count: u32,
     ) {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
         render_pass.set_bind_group(1, &self.settings_bind_group, &[]);
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        render_pass.draw(0..vertex_count, 0..1);
+        // Draw 6 vertices (2 triangles) per instance (point)
+        render_pass.draw(0..6, 0..instance_count);
     }
 }
 

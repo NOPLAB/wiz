@@ -1,0 +1,33 @@
+# TurtleBot3 Gazebo Simulation for wiz testing
+#
+# This image runs TurtleBot3 in Gazebo, publishing realistic sensor data
+# that can be visualized in both wiz and RViz.
+#
+# Build: docker build -f docker/Dockerfile.gazebo -t wiz-gazebo:humble .
+# Run: docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix wiz-gazebo:humble
+
+FROM osrf/ros:humble-desktop
+
+# Install TurtleBot3 packages
+RUN apt-get update && apt-get install -y \
+    ros-humble-turtlebot3-gazebo \
+    ros-humble-turtlebot3-teleop \
+    ros-humble-turtlebot3-navigation2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set TurtleBot3 model (waffle_pi has camera + LiDAR)
+ENV TURTLEBOT3_MODEL=waffle_pi
+
+# Add Gazebo model path
+ENV GAZEBO_MODEL_PATH=/opt/ros/humble/share/turtlebot3_gazebo/models:${GAZEBO_MODEL_PATH}
+
+# Create entrypoint script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+source /opt/ros/humble/setup.bash\n\
+exec "$@"' > /ros_entrypoint.sh && chmod +x /ros_entrypoint.sh
+
+ENTRYPOINT ["/ros_entrypoint.sh"]
+
+# Launch TurtleBot3 in Gazebo world
+CMD ["ros2", "launch", "turtlebot3_gazebo", "turtlebot3_world.launch.py"]

@@ -80,6 +80,10 @@ async fn run_mock_data_generator(state: AppState) {
                     };
                     rmp_serde::to_vec(&cloud).ok()
                 }
+                "geometry_msgs/msg/PoseStamped" => {
+                    let pose = generator.generate_pose(&topic);
+                    rmp_serde::to_vec(&pose).ok()
+                }
                 _ => None,
             };
 

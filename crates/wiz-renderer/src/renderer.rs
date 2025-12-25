@@ -1,4 +1,5 @@
 use glam::Mat4;
+use std::collections::HashSet;
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -6,6 +7,7 @@ use crate::{
     grid::GridRenderer,
     laser_scan::{LaserScanData, LaserScanRenderer, LaserScanVertex},
     point_cloud::{PointCloudData, PointCloudRenderer, PointVertex},
+    pose::{PoseInstance, PoseRenderer},
     tf_axis::TfAxisRenderer,
 };
 
@@ -19,12 +21,19 @@ pub struct Renderer {
     point_cloud_renderer: PointCloudRenderer,
     laser_scan_renderer: LaserScanRenderer,
     tf_axis_renderer: TfAxisRenderer,
+    pose_renderer: PoseRenderer,
     point_clouds: Vec<PointCloudData>,
     laser_scans: Vec<LaserScanData>,
+    poses: Vec<PoseInstance>,
     show_tf_frames: bool,
+    show_poses: bool,
     format: wgpu::TextureFormat,
     width: u32,
     height: u32,
+    /// Visible point cloud indices
+    visible_point_clouds: HashSet<usize>,
+    /// Visible laser scan indices
+    visible_laser_scans: HashSet<usize>,
 }
 
 impl Renderer {
@@ -94,6 +103,14 @@ impl Renderer {
             &camera_buffer,
         );
 
+        let pose_renderer = PoseRenderer::new(
+            device,
+            format,
+            depth_format,
+            &camera_bind_group_layout,
+            &camera_buffer,
+        );
+
         Self {
             camera,
             camera_buffer,
@@ -104,12 +121,35 @@ impl Renderer {
             point_cloud_renderer,
             laser_scan_renderer,
             tf_axis_renderer,
+            pose_renderer,
             point_clouds: Vec::new(),
             laser_scans: Vec::new(),
+            poses: Vec::new(),
             show_tf_frames: true,
+            show_poses: true,
             format,
             width,
             height,
+            visible_point_clouds: HashSet::new(),
+            visible_laser_scans: HashSet::new(),
+        }
+    }
+
+    /// Set point cloud visibility by index
+    pub fn set_point_cloud_visible(&mut self, index: usize, visible: bool) {
+        if visible {
+            self.visible_point_clouds.insert(index);
+        } else {
+            self.visible_point_clouds.remove(&index);
+        }
+    }
+
+    /// Set laser scan visibility by index
+    pub fn set_laser_scan_visible(&mut self, index: usize, visible: bool) {
+        if visible {
+            self.visible_laser_scans.insert(index);
+        } else {
+            self.visible_laser_scans.remove(&index);
         }
     }
 
@@ -220,6 +260,16 @@ impl Renderer {
         self.laser_scans.clear();
     }
 
+    /// Set point cloud point size
+    pub fn set_point_size(&mut self, size: f32) {
+        self.point_cloud_renderer.set_point_size(size);
+    }
+
+    /// Set point cloud alpha
+    pub fn set_point_alpha(&mut self, alpha: f32) {
+        self.point_cloud_renderer.set_alpha(alpha);
+    }
+
     /// Set laser scan color
     pub fn set_laser_scan_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.laser_scan_renderer.set_color(r, g, b, a);
@@ -250,6 +300,49 @@ impl Renderer {
         self.show_tf_frames
     }
 
+    /// Update pose instances
+    pub fn update_poses(&mut self, queue: &wgpu::Queue, poses: &[PoseInstance]) {
+        self.poses = poses.to_vec();
+        self.pose_renderer.update_poses(queue, poses);
+    }
+
+    /// Add a single pose
+    pub fn add_pose(&mut self, queue: &wgpu::Queue, pose: PoseInstance) {
+        self.poses.push(pose);
+        self.pose_renderer.update_poses(queue, &self.poses);
+    }
+
+    /// Clear all poses
+    pub fn clear_poses(&mut self, queue: &wgpu::Queue) {
+        self.poses.clear();
+        self.pose_renderer.update_poses(queue, &self.poses);
+    }
+
+    /// Set pose arrow length
+    pub fn set_pose_arrow_length(&mut self, length: f32) {
+        self.pose_renderer.set_arrow_length(length);
+    }
+
+    /// Set pose arrow width (scale factor)
+    pub fn set_pose_arrow_width(&mut self, width: f32) {
+        self.pose_renderer.set_arrow_width(width);
+    }
+
+    /// Set pose arrow color
+    pub fn set_pose_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
+        self.pose_renderer.set_color(r, g, b, a);
+    }
+
+    /// Toggle pose visibility
+    pub fn set_show_poses(&mut self, show: bool) {
+        self.show_poses = show;
+    }
+
+    /// Get pose visibility
+    pub fn show_poses(&self) -> bool {
+        self.show_poses
+    }
+
     pub fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -260,6 +353,7 @@ impl Renderer {
         self.point_cloud_renderer.update_settings(queue);
         self.laser_scan_renderer.update_settings(queue);
         self.tf_axis_renderer.update_settings(queue);
+        self.pose_renderer.update_settings(queue);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Main Render Pass"),
@@ -291,21 +385,36 @@ impl Renderer {
         // Render grid
         self.grid_renderer.render(&mut render_pass);
 
-        // Render point clouds
-        for pc in &self.point_clouds {
-            self.point_cloud_renderer
-                .render(&mut render_pass, &pc.vertex_buffer, pc.vertex_count);
+        // Render visible point clouds only
+        for (i, pc) in self.point_clouds.iter().enumerate() {
+            if self.visible_point_clouds.contains(&i) {
+                self.point_cloud_renderer.render(
+                    &mut render_pass,
+                    &pc.vertex_buffer,
+                    pc.vertex_count,
+                );
+            }
         }
 
-        // Render laser scans
-        for ls in &self.laser_scans {
-            self.laser_scan_renderer
-                .render(&mut render_pass, &ls.vertex_buffer, ls.vertex_count);
+        // Render visible laser scans only
+        for (i, ls) in self.laser_scans.iter().enumerate() {
+            if self.visible_laser_scans.contains(&i) {
+                self.laser_scan_renderer.render(
+                    &mut render_pass,
+                    &ls.vertex_buffer,
+                    ls.vertex_count,
+                );
+            }
         }
 
         // Render TF frames
         if self.show_tf_frames {
             self.tf_axis_renderer.render(&mut render_pass);
+        }
+
+        // Render poses
+        if self.show_poses {
+            self.pose_renderer.render(&mut render_pass);
         }
     }
 

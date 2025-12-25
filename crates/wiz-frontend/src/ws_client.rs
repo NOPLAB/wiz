@@ -110,26 +110,32 @@ impl WsClientHandle {
     }
 
     /// Subscribe to a topic
-    #[allow(dead_code)]
-    pub fn subscribe(
-        &self,
-        id: String,
-        topic: String,
-        msg_type: String,
-        throttle_rate: Option<u32>,
-    ) {
+    pub fn subscribe(&self, topic: &str, msg_type: &str, throttle_rate: Option<u32>) {
+        // Use topic name as subscription ID for simplicity
+        let id = topic.to_string();
         self.send(ClientMessage::Subscribe {
             id,
-            topic,
-            msg_type,
+            topic: topic.to_string(),
+            msg_type: msg_type.to_string(),
             throttle_rate,
         });
     }
 
-    /// Unsubscribe from a topic
+    /// Unsubscribe from a subscription by ID
+    pub fn unsubscribe(&self, subscription_id: u32) {
+        // We don't have the original topic name, so we'll need to track this separately
+        // For now, just send the unsubscribe with the subscription ID as string
+        self.send(ClientMessage::Unsubscribe {
+            id: subscription_id.to_string(),
+        });
+    }
+
+    /// Unsubscribe by topic name
     #[allow(dead_code)]
-    pub fn unsubscribe(&self, id: String) {
-        self.send(ClientMessage::Unsubscribe { id });
+    pub fn unsubscribe_topic(&self, topic: &str) {
+        self.send(ClientMessage::Unsubscribe {
+            id: topic.to_string(),
+        });
     }
 
     /// Request topic list
