@@ -4,7 +4,9 @@ use std::sync::Arc;
 use tracing::info;
 use wiz_core::TopicInfo;
 
-use crate::panels::{DisplaysPanel, Panel, PerformancePanel, TfTreePanel, TopicsPanel, ViewportPanel};
+use crate::panels::{
+    DisplaysPanel, Panel, PerformancePanel, TfTreePanel, TopicsPanel, ViewportPanel,
+};
 use crate::viewport_state::{SharedViewportState, ViewportState};
 use crate::ws_client::{ConnectionState, WsClientHandle, WsEvent};
 
@@ -116,7 +118,10 @@ impl WizApp {
                 .show_ui(ui, |ui| {
                     let frames = ["map", "odom", "base_link"];
                     for frame in frames {
-                        if ui.selectable_label(self.fixed_frame == frame, frame).clicked() {
+                        if ui
+                            .selectable_label(self.fixed_frame == frame, frame)
+                            .clicked()
+                        {
                             self.fixed_frame = frame.to_string();
                         }
                     }
@@ -181,11 +186,26 @@ impl WizApp {
             ServerMessage::Unsubscribed { id } => {
                 info!("Unsubscribed (id: {})", id);
             }
-            ServerMessage::Data { topic, msg_type, timestamp, payload } => {
+            ServerMessage::Data {
+                topic,
+                msg_type,
+                timestamp,
+                payload,
+            } => {
                 // TODO: Handle incoming data (point clouds, laser scans, etc.)
-                info!("Received data from {} ({}) at {}: {} bytes", topic, msg_type, timestamp, payload.len());
+                info!(
+                    "Received data from {} ({}) at {}: {} bytes",
+                    topic,
+                    msg_type,
+                    timestamp,
+                    payload.len()
+                );
             }
-            ServerMessage::Transform { target_frame, source_frame, transform } => {
+            ServerMessage::Transform {
+                target_frame,
+                source_frame,
+                transform,
+            } => {
                 info!("TF: {} -> {} = {:?}", source_frame, target_frame, transform);
             }
             ServerMessage::Error { message } => {
@@ -323,13 +343,12 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         // Pass render context to viewport panel if it needs it
-        if tab.name() == "3D Viewport" {
-            if let (Some(render_state), Some(viewport_state)) =
+        if tab.name() == "3D Viewport"
+            && let (Some(render_state), Some(viewport_state)) =
                 (self.render_state, &self.viewport_state)
-            {
-                tab.ui_with_render_context(ui, render_state, viewport_state.clone());
-                return;
-            }
+        {
+            tab.ui_with_render_context(ui, render_state, viewport_state.clone());
+            return;
         }
         tab.ui(ui);
     }

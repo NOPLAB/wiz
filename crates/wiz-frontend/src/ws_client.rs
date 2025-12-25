@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info};
-use wiz_protocol::{decode_server_message, encode_client_message, ClientMessage, ServerMessage};
+use wiz_protocol::{ClientMessage, ServerMessage, decode_server_message, encode_client_message};
 
 /// Connection command sent from UI to background task
 #[derive(Debug)]
@@ -77,7 +77,14 @@ impl WsClientHandle {
     }
 
     /// Subscribe to a topic
-    pub fn subscribe(&self, id: String, topic: String, msg_type: String, throttle_rate: Option<u32>) {
+    #[allow(dead_code)]
+    pub fn subscribe(
+        &self,
+        id: String,
+        topic: String,
+        msg_type: String,
+        throttle_rate: Option<u32>,
+    ) {
         self.send(ClientMessage::Subscribe {
             id,
             topic,
@@ -87,6 +94,7 @@ impl WsClientHandle {
     }
 
     /// Unsubscribe from a topic
+    #[allow(dead_code)]
     pub fn unsubscribe(&self, id: String) {
         self.send(ClientMessage::Unsubscribe { id });
     }
@@ -112,6 +120,7 @@ impl WsClientHandle {
     }
 
     /// Check if connected
+    #[allow(dead_code)]
     pub fn is_connected(&self) -> bool {
         matches!(*self.state.lock(), ConnectionState::Connected)
     }
@@ -188,10 +197,10 @@ async fn connect_to_server(
     // Task to send messages to server
     tokio::spawn(async move {
         while let Some(msg) = client_rx.recv().await {
-            if let Ok(data) = encode_client_message(&msg) {
-                if write.send(Message::Binary(data.into())).await.is_err() {
-                    break;
-                }
+            if let Ok(data) = encode_client_message(&msg)
+                && write.send(Message::Binary(data.into())).await.is_err()
+            {
+                break;
             }
         }
     });
@@ -201,10 +210,10 @@ async fn connect_to_server(
         while let Some(msg_result) = read.next().await {
             match msg_result {
                 Ok(Message::Binary(data)) => {
-                    if let Ok(server_msg) = decode_server_message(&data) {
-                        if event_tx.send(WsEvent::Message(server_msg)).is_err() {
-                            break;
-                        }
+                    if let Ok(server_msg) = decode_server_message(&data)
+                        && event_tx.send(WsEvent::Message(server_msg)).is_err()
+                    {
+                        break;
                     }
                 }
                 Ok(Message::Close(_)) => {

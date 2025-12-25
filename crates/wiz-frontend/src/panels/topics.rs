@@ -37,6 +37,7 @@ impl TopicsPanel {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_topics(&mut self, topics: Vec<TopicInfo>) {
         self.topics = topics;
     }
@@ -71,7 +72,7 @@ impl Panel for TopicsPanel {
                 }
 
                 let is_selected = self.selected == Some(i);
-                let response = ui.selectable_label(is_selected, format!("{}", topic.name));
+                let response = ui.selectable_label(is_selected, topic.name.to_string());
 
                 if response.clicked() {
                     self.selected = Some(i);

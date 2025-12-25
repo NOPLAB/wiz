@@ -14,6 +14,7 @@ struct AppStateInner {
     tx: broadcast::Sender<ServerMessage>,
 }
 
+#[allow(dead_code)]
 struct SubscriptionInfo {
     topic: String,
     msg_type: String,

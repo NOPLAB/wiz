@@ -4,6 +4,7 @@ use crate::viewport_state::SharedViewportState;
 pub struct ViewportPanel {
     last_size: egui::Vec2,
     camera_mode: CameraMode,
+    #[allow(dead_code)]
     viewport_state: Option<SharedViewportState>,
 }
 

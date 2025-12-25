@@ -41,10 +41,7 @@ impl TfTreePanel {
                     vec![
                         TfNode::new("laser_frame"),
                         TfNode::new("camera_link"),
-                        TfNode::with_children(
-                            "wheel_left",
-                            vec![],
-                        ),
+                        TfNode::with_children("wheel_left", vec![]),
                         TfNode::new("wheel_right"),
                     ],
                 )],
@@ -116,7 +113,11 @@ impl Panel for TfTreePanel {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.fixed_frame, "map".to_string(), "map");
                     ui.selectable_value(&mut self.fixed_frame, "odom".to_string(), "odom");
-                    ui.selectable_value(&mut self.fixed_frame, "base_link".to_string(), "base_link");
+                    ui.selectable_value(
+                        &mut self.fixed_frame,
+                        "base_link".to_string(),
+                        "base_link",
+                    );
                 });
         });
 

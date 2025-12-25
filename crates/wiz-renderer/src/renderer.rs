@@ -167,6 +167,7 @@ impl Renderer {
     }
 
     /// Add a laser scan from raw scan parameters
+    #[allow(clippy::too_many_arguments)]
     pub fn add_laser_scan_from_data(
         &mut self,
         device: &wgpu::Device,
@@ -190,7 +191,12 @@ impl Renderer {
         self.laser_scans.len() - 1
     }
 
-    pub fn update_laser_scan(&self, queue: &wgpu::Queue, index: usize, vertices: &[LaserScanVertex]) {
+    pub fn update_laser_scan(
+        &self,
+        queue: &wgpu::Queue,
+        index: usize,
+        vertices: &[LaserScanVertex],
+    ) {
         if let Some(ls) = self.laser_scans.get(index) {
             ls.update(queue, vertices);
         }

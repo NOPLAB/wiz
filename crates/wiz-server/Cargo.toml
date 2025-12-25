@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+ros2 = []
+
 [dependencies]
 wiz-core = { path = "../wiz-core" }
 wiz-protocol = { path = "../wiz-protocol" }
@@ -18,8 +22,7 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 parking_lot = { workspace = true }
 tower-http = { version = "0.6", features = ["cors"] }
+cxx = { workspace = true }
 
-# cxx = { workspace = true }
-
-# [build-dependencies]
-# cxx-build = { workspace = true }
+[build-dependencies]
+cxx-build = { workspace = true }

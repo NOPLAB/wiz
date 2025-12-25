@@ -143,10 +143,8 @@ impl Panel for PerformancePanel {
             let fps_data: Vec<f32> = self.fps_history.iter().copied().collect();
             let max_fps = fps_data.iter().cloned().fold(60.0_f32, f32::max);
 
-            let (response, painter) = ui.allocate_painter(
-                egui::vec2(ui.available_width(), 60.0),
-                egui::Sense::hover(),
-            );
+            let (response, painter) =
+                ui.allocate_painter(egui::vec2(ui.available_width(), 60.0), egui::Sense::hover());
 
             let rect = response.rect;
             painter.rect_filled(rect, 0.0, egui::Color32::from_gray(40));

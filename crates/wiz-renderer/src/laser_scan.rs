@@ -214,7 +214,9 @@ impl LaserScanData {
                 let y = range * angle.sin();
                 let z = 0.0; // 2D scan is in XY plane
 
-                let intensity = intensities.and_then(|ints| ints.get(i).copied()).unwrap_or(1.0);
+                let intensity = intensities
+                    .and_then(|ints| ints.get(i).copied())
+                    .unwrap_or(1.0);
 
                 Some(LaserScanVertex {
                     position: [x, y, z],

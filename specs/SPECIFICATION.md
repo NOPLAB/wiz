@@ -401,33 +401,33 @@ axis_length = 0.5
 ### Phase 1: Foundation (MVP)
 プロジェクト基盤とコア機能の実装
 
-- [ ] **プロジェクト構造**
-  - [ ] Cargo workspaceセットアップ
-  - [ ] cxx FFI基本構成
-  - [ ] CI/CD (GitHub Actions)
+- [x] **プロジェクト構造**
+  - [x] Cargo workspaceセットアップ
+  - [x] cxx FFI基本構成
+  - [x] CI/CD (GitHub Actions)
 
-- [ ] **ROS2 Bridge (C++)**
-  - [ ] rclcpp初期化/終了
-  - [ ] PointCloud2 Subscriber
-  - [ ] LaserScan Subscriber
-  - [ ] TF2 lookup
+- [x] **ROS2 Bridge (C++)** ※モック実装、ros2 feature有効時に実ROS2連携
+  - [x] rclcpp初期化/終了
+  - [x] PointCloud2 Subscriber
+  - [x] LaserScan Subscriber
+  - [x] TF2 lookup
 
-- [ ] **WebSocket Server (Rust)**
-  - [ ] axum WebSocketエンドポイント
-  - [ ] MessagePackシリアライズ
-  - [ ] トピック一覧API
+- [x] **WebSocket Server (Rust)**
+  - [x] axum WebSocketエンドポイント
+  - [x] MessagePackシリアライズ
+  - [x] トピック一覧API
 
-- [ ] **Renderer (Rust/WebGPU)**
-  - [ ] wgpu初期化 (Native + WASM)
-  - [ ] 基本カメラ制御
-  - [ ] グリッド描画
-  - [ ] 点群レンダリング (GPU instancing)
-  - [ ] LaserScan線描画
+- [x] **Renderer (Rust/WebGPU)**
+  - [x] wgpu初期化 (Native + WASM)
+  - [x] 基本カメラ制御
+  - [x] グリッド描画
+  - [x] 点群レンダリング (GPU instancing)
+  - [x] LaserScan線描画
 
-- [ ] **Frontend (egui)**
-  - [ ] 接続設定UI
-  - [ ] トピック選択パネル
-  - [ ] 3Dビューポート統合
+- [x] **Frontend (egui)**
+  - [x] 接続設定UI
+  - [x] トピック選択パネル
+  - [x] 3Dビューポート統合
 
 ### Phase 2: Core Features
 可視化機能の拡充

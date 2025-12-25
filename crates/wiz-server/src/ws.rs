@@ -1,20 +1,17 @@
 use axum::{
     extract::{
-        ws::{Message, WebSocket},
         State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     response::IntoResponse,
 };
 use futures_util::{SinkExt, StreamExt};
 use tracing::{debug, error, info};
-use wiz_protocol::{decode_client_message, encode_server_message, ClientMessage, ServerMessage};
+use wiz_protocol::{ClientMessage, ServerMessage, decode_client_message, encode_server_message};
 
 use crate::state::AppState;
 
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
@@ -26,10 +23,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     // Task to forward broadcast messages to the client
     let send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
-            if let Ok(data) = encode_server_message(&msg) {
-                if sender.send(Message::Binary(data.into())).await.is_err() {
-                    break;
-                }
+            if let Ok(data) = encode_server_message(&msg)
+                && sender.send(Message::Binary(data.into())).await.is_err()
+            {
+                break;
             }
         }
     });

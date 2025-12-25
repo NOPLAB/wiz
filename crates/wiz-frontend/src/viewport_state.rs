@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use parking_lot::Mutex;
-use wiz_renderer::{laser_scan::LaserScanVertex, point_cloud::PointVertex, Renderer};
+use std::sync::Arc;
+use wiz_renderer::{Renderer, laser_scan::LaserScanVertex, point_cloud::PointVertex};
 
 /// Shared viewport rendering state
 pub struct ViewportState {
@@ -11,6 +11,7 @@ pub struct ViewportState {
 }
 
 struct RenderTexture {
+    #[allow(dead_code)]
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     egui_texture_id: egui::TextureId,
