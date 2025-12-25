@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ============================================
   # wiz Server (connects to ROS2 network)
@@ -9,7 +7,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.humble
     image: wiz-server:humble
-    network_mode: host
+    ports:
+      - "9090:9090"
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
     # Uncomment to enable cyclonedds
@@ -23,7 +22,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.jazzy
     image: wiz-server:jazzy
-    network_mode: host
+    ports:
+      - "9090:9090"
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
 
@@ -35,8 +35,11 @@ services:
       context: .
       dockerfile: docker/Dockerfile.ros2-example
     image: wiz-ros2-example
-    network_mode: host
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
     profiles:
       - example
+
+networks:
+  default:
+    driver: bridge
