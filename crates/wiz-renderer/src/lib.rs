@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod grid;
 pub mod laser_scan;
+pub mod marker;
 pub mod pipeline;
 pub mod point_cloud;
 pub mod pose;
@@ -10,6 +11,7 @@ pub mod tf_axis;
 pub use camera::Camera;
 pub use grid::GridRenderer;
 pub use laser_scan::{LaserScanData, LaserScanRenderer, LaserScanVertex};
+pub use marker::{MarkerInstance, MarkerRenderer, MarkerVertex};
 pub use point_cloud::PointCloudRenderer;
 pub use pose::{PoseData, PoseInstance, PoseRenderer, PoseVertex};
 pub use renderer::Renderer;

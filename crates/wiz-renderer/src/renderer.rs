@@ -1,11 +1,13 @@
 use glam::Mat4;
 use std::collections::HashSet;
 use wgpu::util::DeviceExt;
+use wiz_core::Marker;
 
 use crate::{
     camera::Camera,
     grid::GridRenderer,
     laser_scan::{LaserScanData, LaserScanRenderer, LaserScanVertex},
+    marker::MarkerRenderer,
     point_cloud::{PointCloudData, PointCloudRenderer, PointVertex},
     pose::{PoseInstance, PoseRenderer},
     tf_axis::TfAxisRenderer,
@@ -22,11 +24,13 @@ pub struct Renderer {
     laser_scan_renderer: LaserScanRenderer,
     tf_axis_renderer: TfAxisRenderer,
     pose_renderer: PoseRenderer,
+    marker_renderer: MarkerRenderer,
     point_clouds: Vec<PointCloudData>,
     laser_scans: Vec<LaserScanData>,
     poses: Vec<PoseInstance>,
     show_tf_frames: bool,
     show_poses: bool,
+    show_markers: bool,
     format: wgpu::TextureFormat,
     width: u32,
     height: u32,
@@ -59,7 +63,7 @@ impl Renderer {
                 label: Some("Camera Bind Group Layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -111,6 +115,14 @@ impl Renderer {
             &camera_buffer,
         );
 
+        let marker_renderer = MarkerRenderer::new(
+            device,
+            format,
+            depth_format,
+            &camera_bind_group_layout,
+            &camera_buffer,
+        );
+
         Self {
             camera,
             camera_buffer,
@@ -122,11 +134,13 @@ impl Renderer {
             laser_scan_renderer,
             tf_axis_renderer,
             pose_renderer,
+            marker_renderer,
             point_clouds: Vec::new(),
             laser_scans: Vec::new(),
             poses: Vec::new(),
             show_tf_frames: true,
             show_poses: true,
+            show_markers: true,
             format,
             width,
             height,
@@ -343,6 +357,41 @@ impl Renderer {
         self.show_poses
     }
 
+    /// Process a marker (add, modify, or delete)
+    pub fn process_marker(&mut self, marker: &Marker) {
+        self.marker_renderer.process_marker(marker);
+    }
+
+    /// Process multiple markers (MarkerArray)
+    pub fn process_markers(&mut self, markers: &[Marker]) {
+        self.marker_renderer.process_markers(markers);
+    }
+
+    /// Clear all markers
+    pub fn clear_markers(&mut self) {
+        self.marker_renderer.clear();
+    }
+
+    /// Toggle marker visibility
+    pub fn set_show_markers(&mut self, show: bool) {
+        self.show_markers = show;
+    }
+
+    /// Get marker visibility
+    pub fn show_markers(&self) -> bool {
+        self.show_markers
+    }
+
+    /// Get the number of active markers
+    pub fn marker_count(&self) -> usize {
+        self.marker_renderer.marker_count()
+    }
+
+    /// Update marker buffers (should be called before render)
+    pub fn update_markers(&mut self, queue: &wgpu::Queue) {
+        self.marker_renderer.update(queue);
+    }
+
     pub fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -415,6 +464,11 @@ impl Renderer {
         // Render poses
         if self.show_poses {
             self.pose_renderer.render(&mut render_pass);
+        }
+
+        // Render markers
+        if self.show_markers {
+            self.marker_renderer.render(&mut render_pass, queue);
         }
     }
 

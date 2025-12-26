@@ -26,17 +26,28 @@ pub struct Camera {
 
 impl Camera {
     pub fn new(aspect: f32) -> Self {
+        let yaw = 45.0_f32.to_radians();
+        let pitch = 30.0_f32.to_radians();
+        let distance = 10.0;
+        let target = Vec3::ZERO;
+
+        // Calculate initial position from orbit parameters
+        let x = distance * pitch.cos() * yaw.cos();
+        let y = distance * pitch.cos() * yaw.sin();
+        let z = distance * pitch.sin();
+        let position = target + Vec3::new(x, y, z);
+
         Self {
-            position: Vec3::new(5.0, 5.0, 5.0),
-            target: Vec3::ZERO,
+            position,
+            target,
             up: Vec3::Z,
             fov: 60.0_f32.to_radians(),
             aspect,
             near: 0.1,
             far: 1000.0,
-            yaw: 45.0_f32.to_radians(),
-            pitch: 30.0_f32.to_radians(),
-            distance: 10.0,
+            yaw,
+            pitch,
+            distance,
         }
     }
 
