@@ -4,17 +4,14 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::app_state::{AppAction, AppState, SharedAppState};
-use crate::panels::{
-    DisplaysPanel, Panel, PerformancePanel, TfTreePanel, TopicsPanel, ViewportPanel,
-};
+use crate::panels::{Panel, PerformancePanel, PropertyPanel, TopicsPanel, ViewportPanel};
 use crate::viewport_state::{SharedViewportState, ViewportState};
 use crate::ws_client::{ConnectionState, WsClientHandle, WsEvent};
 
 /// Tracks which panels are currently visible/open
 struct PanelVisibility {
     topics: bool,
-    displays: bool,
-    tf_tree: bool,
+    property: bool,
     performance: bool,
 }
 
@@ -22,8 +19,7 @@ impl Default for PanelVisibility {
     fn default() -> Self {
         Self {
             topics: true,
-            displays: true,
-            tf_tree: true,
+            property: true,
             performance: true,
         }
     }
@@ -70,7 +66,7 @@ impl WizApp {
         let [main, _right] = dock_state.main_surface_mut().split_right(
             NodeIndex::root(),
             0.75,
-            vec![Box::new(DisplaysPanel::new(app_state.clone())) as Box<dyn Panel>],
+            vec![Box::new(PropertyPanel::new(app_state.clone())) as Box<dyn Panel>],
         );
 
         let [_left, _main] = dock_state.main_surface_mut().split_left(
@@ -82,10 +78,7 @@ impl WizApp {
         let [_main, _bottom] = dock_state.main_surface_mut().split_below(
             main,
             0.7,
-            vec![
-                Box::new(TfTreePanel::new()) as Box<dyn Panel>,
-                Box::new(PerformancePanel::new()) as Box<dyn Panel>,
-            ],
+            vec![Box::new(PerformancePanel::new(app_state.clone())) as Box<dyn Panel>],
         );
 
         Self {
@@ -128,8 +121,7 @@ impl WizApp {
     /// Sync panel visibility state with actual dock state
     fn sync_panel_visibility(&mut self) {
         self.panel_visibility.topics = self.has_panel("Topics");
-        self.panel_visibility.displays = self.has_panel("Displays");
-        self.panel_visibility.tf_tree = self.has_panel("TF Tree");
+        self.panel_visibility.property = self.has_panel("Property");
         self.panel_visibility.performance = self.has_panel("Performance");
     }
 
@@ -141,9 +133,8 @@ impl WizApp {
             // Add the panel
             let panel: Box<dyn Panel> = match name {
                 "Topics" => Box::new(TopicsPanel::new(self.app_state.clone())),
-                "Displays" => Box::new(DisplaysPanel::new(self.app_state.clone())),
-                "TF Tree" => Box::new(TfTreePanel::new()),
-                "Performance" => Box::new(PerformancePanel::new()),
+                "Property" => Box::new(PropertyPanel::new(self.app_state.clone())),
+                "Performance" => Box::new(PerformancePanel::new(self.app_state.clone())),
                 _ => return,
             };
             self.add_panel(panel);
@@ -154,8 +145,7 @@ impl WizApp {
         // Update visibility state
         match name {
             "Topics" => self.panel_visibility.topics = should_be_visible,
-            "Displays" => self.panel_visibility.displays = should_be_visible,
-            "TF Tree" => self.panel_visibility.tf_tree = should_be_visible,
+            "Property" => self.panel_visibility.property = should_be_visible,
             "Performance" => self.panel_visibility.performance = should_be_visible,
             _ => {}
         }
@@ -181,9 +171,9 @@ impl WizApp {
                     ui.label("A next-generation visualization tool for ROS2");
                     ui.label("Built with Rust, WebGPU, and egui");
                     ui.add_space(8.0);
-                    ui.hyperlink_to("GitHub Repository", "https://github.com/your-repo/wiz");
+                    ui.hyperlink_to("GitHub Repository", "https://github.com/NOPLAB/wiz");
                     ui.add_space(8.0);
-                    ui.label("Apache 2.0 / MIT License");
+                    ui.label("MIT License");
                 });
             });
     }
@@ -215,7 +205,7 @@ impl WizApp {
                         ui.label("Toggle Fullscreen");
                         ui.end_row();
 
-                        ui.add_space(8.0);
+                        ui.label("");
                         ui.end_row();
 
                         ui.label(egui::RichText::new("View").strong());
@@ -233,7 +223,7 @@ impl WizApp {
                         ui.label("Fit All in View");
                         ui.end_row();
 
-                        ui.add_space(8.0);
+                        ui.label("");
                         ui.end_row();
 
                         ui.label(egui::RichText::new("Panels").strong());
@@ -244,14 +234,10 @@ impl WizApp {
                         ui.end_row();
 
                         ui.label("2");
-                        ui.label("Toggle Displays Panel");
+                        ui.label("Toggle Property Panel");
                         ui.end_row();
 
                         ui.label("3");
-                        ui.label("Toggle TF Tree Panel");
-                        ui.end_row();
-
-                        ui.label("4");
                         ui.label("Toggle Performance Panel");
                         ui.end_row();
                     });
@@ -268,7 +254,7 @@ impl WizApp {
         let [main, _right] = dock_state.main_surface_mut().split_right(
             NodeIndex::root(),
             0.75,
-            vec![Box::new(DisplaysPanel::new(self.app_state.clone())) as Box<dyn Panel>],
+            vec![Box::new(PropertyPanel::new(self.app_state.clone())) as Box<dyn Panel>],
         );
 
         let [_left, _main] = dock_state.main_surface_mut().split_left(
@@ -280,10 +266,7 @@ impl WizApp {
         let [_main, _bottom] = dock_state.main_surface_mut().split_below(
             main,
             0.7,
-            vec![
-                Box::new(TfTreePanel::new()) as Box<dyn Panel>,
-                Box::new(PerformancePanel::new()) as Box<dyn Panel>,
-            ],
+            vec![Box::new(PerformancePanel::new(self.app_state.clone())) as Box<dyn Panel>],
         );
 
         self.dock_state = dock_state;
@@ -336,20 +319,14 @@ impl WizApp {
                 self.toggle_panel("Topics", visible);
             }
 
-            // 2: Displays Panel toggle
+            // 2: Property Panel toggle
             if input.consume_key(egui::Modifiers::NONE, egui::Key::Num2) {
-                let visible = !self.has_panel("Displays");
-                self.toggle_panel("Displays", visible);
+                let visible = !self.has_panel("Property");
+                self.toggle_panel("Property", visible);
             }
 
-            // 3: TF Tree Panel toggle
+            // 3: Performance Panel toggle
             if input.consume_key(egui::Modifiers::NONE, egui::Key::Num3) {
-                let visible = !self.has_panel("TF Tree");
-                self.toggle_panel("TF Tree", visible);
-            }
-
-            // 4: Performance Panel toggle
-            if input.consume_key(egui::Modifiers::NONE, egui::Key::Num4) {
                 let visible = !self.has_panel("Performance");
                 self.toggle_panel("Performance", visible);
             }
@@ -497,7 +474,7 @@ impl WizApp {
                     timestamp,
                     payload.len()
                 );
-                self.handle_data_message(&topic, &msg_type, &payload);
+                self.handle_data_message(&topic, &msg_type, timestamp, &payload);
             }
             ServerMessage::Transform {
                 target_frame,
@@ -551,14 +528,14 @@ impl WizApp {
                 continue;
             }
             match display.display_type {
-                crate::panels::displays::DisplayType::PointCloud2 => {
+                crate::panels::property::DisplayType::PointCloud2 => {
                     viewport.set_point_size(display.point_size);
                     viewport.set_point_alpha(display.alpha);
                 }
-                crate::panels::displays::DisplayType::LaserScan => {
+                crate::panels::property::DisplayType::LaserScan => {
                     viewport.set_laser_scan_color(display.color);
                 }
-                crate::panels::displays::DisplayType::Pose => {
+                crate::panels::property::DisplayType::Pose => {
                     viewport.set_pose_color(display.color);
                     viewport.set_pose_arrow_length(display.arrow_length);
                     viewport.set_pose_arrow_width(display.arrow_width);
@@ -568,7 +545,14 @@ impl WizApp {
         }
     }
 
-    fn handle_data_message(&mut self, topic: &str, msg_type: &str, payload: &[u8]) {
+    fn handle_data_message(&mut self, topic: &str, msg_type: &str, timestamp: f64, payload: &[u8]) {
+        // Record network stats and latency
+        {
+            let mut state = self.app_state.lock();
+            state.performance_stats.record_data(payload.len() as u64, 1);
+            state.performance_stats.record_latency(timestamp);
+        }
+
         let Some(ref viewport_state) = self.viewport_state else {
             return;
         };
@@ -577,12 +561,15 @@ impl WizApp {
         if msg_type.contains("PointCloud2") {
             match rmp_serde::from_slice::<wiz_core::PointCloud2>(payload) {
                 Ok(cloud) => {
-                    tracing::debug!(
-                        "Updating point cloud {} with {} points",
-                        topic,
-                        cloud.point_count()
-                    );
+                    let point_count = cloud.point_count();
+                    tracing::debug!("Updating point cloud {} with {} points", topic, point_count);
                     viewport_state.lock().update_point_cloud(topic, &cloud);
+
+                    // Update GPU memory estimate (position: 12 bytes + color: 4 bytes = 16 bytes per point)
+                    self.app_state
+                        .lock()
+                        .performance_stats
+                        .update_gpu_memory(point_count, 16);
                 }
                 Err(e) => {
                     tracing::warn!("Failed to decode PointCloud2: {}", e);
@@ -612,6 +599,143 @@ impl WizApp {
                     tracing::warn!("Failed to decode PoseStamped: {}", e);
                 }
             }
+        } else if msg_type.contains("MarkerArray") {
+            match rmp_serde::from_slice::<wiz_core::MarkerArray>(payload) {
+                Ok(marker_array) => {
+                    tracing::debug!(
+                        "Updating markers {} with {} markers",
+                        topic,
+                        marker_array.markers.len()
+                    );
+                    viewport_state.lock().update_markers(topic, &marker_array);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode MarkerArray: {}", e);
+                }
+            }
+        } else if msg_type.contains("TFMessage") {
+            match rmp_serde::from_slice::<wiz_core::TFMessage>(payload) {
+                Ok(tf_message) => {
+                    tracing::debug!(
+                        "Updating TF {} with {} transforms",
+                        topic,
+                        tf_message.transforms.len()
+                    );
+                    viewport_state.lock().update_tf_message(topic, &tf_message);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode TFMessage: {}", e);
+                }
+            }
+        } else if msg_type.contains("Odometry") {
+            match rmp_serde::from_slice::<wiz_core::Odometry>(payload) {
+                Ok(odom) => {
+                    tracing::debug!(
+                        "Updating odometry {} at {:?}",
+                        topic,
+                        odom.pose.pose.position
+                    );
+                    viewport_state.lock().update_odometry(topic, &odom);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode Odometry: {}", e);
+                }
+            }
+        } else if msg_type.contains("Imu") {
+            match rmp_serde::from_slice::<wiz_core::Imu>(payload) {
+                Ok(imu) => {
+                    tracing::debug!("Updating IMU {} orientation {:?}", topic, imu.orientation);
+                    viewport_state.lock().update_imu(topic, &imu);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode Imu: {}", e);
+                }
+            }
+        } else if msg_type.contains("Twist") {
+            match rmp_serde::from_slice::<wiz_core::TwistStamped>(payload) {
+                Ok(twist) => {
+                    tracing::debug!("Updating twist {} linear {:?}", topic, twist.twist.linear);
+                    viewport_state.lock().update_twist(topic, &twist);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode TwistStamped: {}", e);
+                }
+            }
+        } else if msg_type.contains("JointState") {
+            match rmp_serde::from_slice::<wiz_core::JointState>(payload) {
+                Ok(joint_state) => {
+                    tracing::debug!(
+                        "Updating joint state {} with {} joints",
+                        topic,
+                        joint_state.name.len()
+                    );
+                    viewport_state
+                        .lock()
+                        .update_joint_state(topic, &joint_state);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode JointState: {}", e);
+                }
+            }
+        } else if msg_type.contains("CameraInfo") {
+            match rmp_serde::from_slice::<wiz_core::CameraInfo>(payload) {
+                Ok(camera_info) => {
+                    tracing::debug!(
+                        "Updating camera info {} ({}x{})",
+                        topic,
+                        camera_info.width,
+                        camera_info.height
+                    );
+                    viewport_state
+                        .lock()
+                        .update_camera_info(topic, &camera_info);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode CameraInfo: {}", e);
+                }
+            }
+        } else if msg_type.contains("Clock") {
+            match rmp_serde::from_slice::<wiz_core::Clock>(payload) {
+                Ok(clock) => {
+                    let text = format!("{:.3} sec", clock.clock);
+                    self.app_state.lock().update_display_text(topic, text, None);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode Clock: {}", e);
+                }
+            }
+        } else if msg_type.contains("String") {
+            match rmp_serde::from_slice::<wiz_core::StringMsg>(payload) {
+                Ok(string_msg) => {
+                    self.app_state
+                        .lock()
+                        .update_display_text(topic, string_msg.data, None);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode String: {}", e);
+                }
+            }
+        } else if msg_type.contains("Log") {
+            match rmp_serde::from_slice::<wiz_core::Log>(payload) {
+                Ok(log) => {
+                    let level_str = match log.level {
+                        wiz_core::LogLevel::Debug => "DEBUG",
+                        wiz_core::LogLevel::Info => "INFO",
+                        wiz_core::LogLevel::Warn => "WARN",
+                        wiz_core::LogLevel::Error => "ERROR",
+                        wiz_core::LogLevel::Fatal => "FATAL",
+                    };
+                    let text = format!("[{}] {}", log.name, log.msg);
+                    self.app_state.lock().update_display_text(
+                        topic,
+                        text,
+                        Some(level_str.to_string()),
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode Log: {}", e);
+                }
+            }
         }
     }
 }
@@ -626,6 +750,9 @@ impl eframe::App for WizApp {
 
         // Apply display settings to renderer
         self.apply_display_settings();
+
+        // Update performance stats
+        self.app_state.lock().performance_stats.update();
 
         // Handle keyboard shortcuts
         self.handle_keyboard_shortcuts(ctx);
@@ -665,8 +792,7 @@ impl eframe::App for WizApp {
                     self.sync_panel_visibility();
 
                     let mut topics_visible = self.panel_visibility.topics;
-                    let mut displays_visible = self.panel_visibility.displays;
-                    let mut tf_tree_visible = self.panel_visibility.tf_tree;
+                    let mut property_visible = self.panel_visibility.property;
                     let mut performance_visible = self.panel_visibility.performance;
 
                     ui.horizontal(|ui| {
@@ -679,21 +805,13 @@ impl eframe::App for WizApp {
                     });
                     ui.horizontal(|ui| {
                         if ui
-                            .checkbox(&mut displays_visible, "Displays Panel")
+                            .checkbox(&mut property_visible, "Property Panel")
                             .clicked()
                         {
-                            self.toggle_panel("Displays", displays_visible);
+                            self.toggle_panel("Property", property_visible);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(egui::RichText::new("2").weak());
-                        });
-                    });
-                    ui.horizontal(|ui| {
-                        if ui.checkbox(&mut tf_tree_visible, "TF Tree Panel").clicked() {
-                            self.toggle_panel("TF Tree", tf_tree_visible);
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(egui::RichText::new("3").weak());
                         });
                     });
                     ui.horizontal(|ui| {
@@ -704,7 +822,7 @@ impl eframe::App for WizApp {
                             self.toggle_panel("Performance", performance_visible);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(egui::RichText::new("4").weak());
+                            ui.label(egui::RichText::new("3").weak());
                         });
                     });
                     ui.separator();

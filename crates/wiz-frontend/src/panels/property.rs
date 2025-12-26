@@ -10,6 +10,15 @@ pub enum DisplayType {
     Marker,
     Path,
     Pose,
+    Odometry,
+    Imu,
+    Twist,
+    JointState,
+    Image,
+    CameraInfo,
+    Clock,
+    Log,
+    String,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +35,10 @@ pub struct Display {
     pub arrow_length: f32,
     /// Arrow width for Pose displays
     pub arrow_width: f32,
+    /// Latest text data (for Clock, Log, String types)
+    pub text_data: Option<String>,
+    /// Latest log level (for Log type)
+    pub log_level: Option<String>,
 }
 
 impl Display {
@@ -46,23 +59,25 @@ impl Display {
             subscription_id,
             arrow_length,
             arrow_width,
+            text_data: None,
+            log_level: None,
         }
     }
 }
 
-pub struct DisplaysPanel {
+pub struct PropertyPanel {
     app_state: SharedAppState,
 }
 
-impl DisplaysPanel {
+impl PropertyPanel {
     pub fn new(app_state: SharedAppState) -> Self {
         Self { app_state }
     }
 }
 
-impl Panel for DisplaysPanel {
+impl Panel for PropertyPanel {
     fn name(&self) -> &str {
-        "Displays"
+        "Property"
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {
@@ -91,6 +106,15 @@ impl Panel for DisplaysPanel {
                     DisplayType::Marker => "Marker",
                     DisplayType::Path => "Path",
                     DisplayType::Pose => "Pose",
+                    DisplayType::Odometry => "Odometry",
+                    DisplayType::Imu => "Imu",
+                    DisplayType::Twist => "Twist",
+                    DisplayType::JointState => "JointState",
+                    DisplayType::Image => "Image",
+                    DisplayType::CameraInfo => "CameraInfo",
+                    DisplayType::Clock => "Clock",
+                    DisplayType::Log => "Log",
+                    DisplayType::String => "String",
                 };
 
                 let header =
@@ -183,6 +207,60 @@ impl Panel for DisplaysPanel {
                                             0.01..=0.5,
                                         ));
                                     });
+                                }
+                                DisplayType::Clock => {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Time:");
+                                        if let Some(ref data) = display.text_data {
+                                            ui.monospace(data);
+                                        } else {
+                                            ui.label("(waiting for data)");
+                                        }
+                                    });
+                                }
+                                DisplayType::String => {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Data:");
+                                    });
+                                    if let Some(ref data) = display.text_data {
+                                        ui.add(
+                                            egui::TextEdit::multiline(&mut data.as_str())
+                                                .desired_width(f32::INFINITY)
+                                                .desired_rows(2)
+                                                .interactive(false),
+                                        );
+                                    } else {
+                                        ui.label("(waiting for data)");
+                                    }
+                                }
+                                DisplayType::Log => {
+                                    if let Some(ref level) = display.log_level {
+                                        let level_color = match level.as_str() {
+                                            "DEBUG" => egui::Color32::GRAY,
+                                            "INFO" => egui::Color32::GREEN,
+                                            "WARN" => egui::Color32::YELLOW,
+                                            "ERROR" => egui::Color32::RED,
+                                            "FATAL" => egui::Color32::DARK_RED,
+                                            _ => egui::Color32::WHITE,
+                                        };
+                                        ui.horizontal(|ui| {
+                                            ui.label("Level:");
+                                            ui.colored_label(level_color, level);
+                                        });
+                                    }
+                                    if let Some(ref data) = display.text_data {
+                                        ui.horizontal(|ui| {
+                                            ui.label("Message:");
+                                        });
+                                        ui.add(
+                                            egui::TextEdit::multiline(&mut data.as_str())
+                                                .desired_width(f32::INFINITY)
+                                                .desired_rows(2)
+                                                .interactive(false),
+                                        );
+                                    } else {
+                                        ui.label("(waiting for data)");
+                                    }
                                 }
                                 _ => {}
                             }

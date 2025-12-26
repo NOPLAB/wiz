@@ -1,12 +1,10 @@
-pub mod displays;
 mod performance;
-mod tf_tree;
+pub mod property;
 mod topics;
 mod viewport;
 
-pub use displays::DisplaysPanel;
 pub use performance::PerformancePanel;
-pub use tf_tree::TfTreePanel;
+pub use property::PropertyPanel;
 pub use topics::TopicsPanel;
 pub use viewport::ViewportPanel;
 

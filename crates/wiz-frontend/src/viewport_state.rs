@@ -2,7 +2,10 @@ use glam::Mat4;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
-use wiz_core::{LaserScan, PointCloud2, PoseStamped, Transform3D};
+use wiz_core::{
+    CameraInfo, Imu, JointState, LaserScan, MarkerArray, Odometry, PointCloud2, PoseStamped,
+    TFMessage, Transform3D, TwistStamped,
+};
 use wiz_renderer::{PoseInstance, Renderer, laser_scan::LaserScanVertex, point_cloud::PointVertex};
 
 /// Shared viewport rendering state
@@ -19,6 +22,16 @@ pub struct ViewportState {
     pose_data: HashMap<String, PoseInstance>,
     /// Topic visibility (true = visible in 3D view)
     topic_visibility: HashMap<String, bool>,
+    /// Map from topic name to odometry data (displayed as pose)
+    odometry_data: HashMap<String, PoseInstance>,
+    /// Map from topic name to IMU data (displayed as orientation)
+    imu_data: HashMap<String, PoseInstance>,
+    /// Map from topic name to twist data
+    twist_data: HashMap<String, TwistStamped>,
+    /// Map from topic name to joint state data
+    joint_state_data: HashMap<String, JointState>,
+    /// Map from topic name to camera info data
+    camera_info_data: HashMap<String, CameraInfo>,
 }
 
 struct RenderTexture {
@@ -46,6 +59,11 @@ impl ViewportState {
             laser_scan_indices: HashMap::new(),
             pose_data: HashMap::new(),
             topic_visibility: HashMap::new(),
+            odometry_data: HashMap::new(),
+            imu_data: HashMap::new(),
+            twist_data: HashMap::new(),
+            joint_state_data: HashMap::new(),
+            camera_info_data: HashMap::new(),
         }
     }
 
@@ -319,9 +337,8 @@ impl ViewportState {
         let instance = PoseInstance::from_pose(pose.pose.position, pose.pose.orientation);
         self.pose_data.insert(topic.to_string(), instance);
 
-        // Update renderer with all poses
-        let poses: Vec<PoseInstance> = self.pose_data.values().cloned().collect();
-        self.renderer.update_poses(&self.queue, &poses);
+        // Combine all pose-like data for rendering
+        self.update_all_poses();
     }
 
     /// Set pose arrow length
@@ -350,6 +367,119 @@ impl ViewportState {
     #[allow(dead_code)]
     pub fn show_poses(&self) -> bool {
         self.renderer.show_poses()
+    }
+
+    /// Update markers from MarkerArray message
+    pub fn update_markers(&mut self, _topic: &str, marker_array: &MarkerArray) {
+        // Process all markers in the array
+        self.renderer.process_markers(&marker_array.markers);
+
+        // Update the GPU buffers
+        self.renderer.update_markers(&self.queue);
+    }
+
+    /// Update TF transforms from TFMessage
+    pub fn update_tf_message(&mut self, _topic: &str, tf_message: &TFMessage) {
+        // Convert transforms to Mat4 for rendering
+        let matrices: Vec<Mat4> = tf_message
+            .transforms
+            .iter()
+            .map(|t| {
+                let translation = glam::Vec3::new(
+                    t.transform.translation[0] as f32,
+                    t.transform.translation[1] as f32,
+                    t.transform.translation[2] as f32,
+                );
+                let rotation = glam::Quat::from_xyzw(
+                    t.transform.rotation[0] as f32,
+                    t.transform.rotation[1] as f32,
+                    t.transform.rotation[2] as f32,
+                    t.transform.rotation[3] as f32,
+                );
+                Mat4::from_rotation_translation(rotation, translation)
+            })
+            .collect();
+
+        self.renderer.update_tf_frames(&self.queue, &matrices);
+    }
+
+    /// Update odometry data (displayed as a pose arrow)
+    pub fn update_odometry(&mut self, topic: &str, odom: &Odometry) {
+        let instance = PoseInstance::from_pose(odom.pose.pose.position, odom.pose.pose.orientation);
+        self.odometry_data.insert(topic.to_string(), instance);
+
+        // Combine all pose-like data for rendering
+        self.update_all_poses();
+    }
+
+    /// Update IMU data (displayed as orientation at origin)
+    pub fn update_imu(&mut self, topic: &str, imu: &Imu) {
+        // IMU shows orientation, position at origin
+        let instance = PoseInstance::from_pose([0.0, 0.0, 0.5], imu.orientation);
+        self.imu_data.insert(topic.to_string(), instance);
+
+        // Combine all pose-like data for rendering
+        self.update_all_poses();
+    }
+
+    /// Update twist data
+    pub fn update_twist(&mut self, topic: &str, twist: &TwistStamped) {
+        self.twist_data.insert(topic.to_string(), twist.clone());
+        // Twist visualization could be added as velocity arrows
+    }
+
+    /// Update joint state data
+    pub fn update_joint_state(&mut self, topic: &str, joint_state: &JointState) {
+        self.joint_state_data
+            .insert(topic.to_string(), joint_state.clone());
+        // Joint state visualization could be added (e.g., robot model)
+    }
+
+    /// Update camera info data
+    pub fn update_camera_info(&mut self, topic: &str, camera_info: &CameraInfo) {
+        self.camera_info_data
+            .insert(topic.to_string(), camera_info.clone());
+        // Camera info could be used to render camera frustum
+    }
+
+    /// Helper to update all pose-like data in renderer
+    fn update_all_poses(&mut self) {
+        let mut all_poses: Vec<PoseInstance> = Vec::new();
+
+        // Add poses from PoseStamped topics
+        all_poses.extend(self.pose_data.values().cloned());
+
+        // Add poses from Odometry topics
+        all_poses.extend(self.odometry_data.values().cloned());
+
+        // Add poses from IMU topics
+        all_poses.extend(self.imu_data.values().cloned());
+
+        self.renderer.update_poses(&self.queue, &all_poses);
+    }
+
+    /// Clear all markers
+    #[allow(dead_code)]
+    pub fn clear_markers(&mut self) {
+        self.renderer.clear_markers();
+    }
+
+    /// Toggle marker visibility
+    #[allow(dead_code)]
+    pub fn set_show_markers(&mut self, show: bool) {
+        self.renderer.set_show_markers(show);
+    }
+
+    /// Get marker visibility
+    #[allow(dead_code)]
+    pub fn show_markers(&self) -> bool {
+        self.renderer.show_markers()
+    }
+
+    /// Get the number of active markers
+    #[allow(dead_code)]
+    pub fn marker_count(&self) -> usize {
+        self.renderer.marker_count()
     }
 
     /// Convert PointCloud2 to PointVertex array

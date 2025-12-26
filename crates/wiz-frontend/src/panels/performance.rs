@@ -1,33 +1,22 @@
+use crate::app_state::SharedAppState;
 use crate::panels::Panel;
 use std::collections::VecDeque;
 use web_time::Instant;
 
 pub struct PerformancePanel {
+    app_state: SharedAppState,
     fps_history: VecDeque<f32>,
     last_frame_time: Instant,
     frame_times: VecDeque<f32>,
-    point_count: usize,
-    triangle_count: usize,
-    latency_ms: f32,
-    bandwidth_mbs: f32,
-    messages_per_sec: u32,
-    gpu_memory_mb: f32,
-    cpu_memory_mb: f32,
 }
 
 impl PerformancePanel {
-    pub fn new() -> Self {
+    pub fn new(app_state: SharedAppState) -> Self {
         Self {
+            app_state,
             fps_history: VecDeque::with_capacity(120),
             last_frame_time: Instant::now(),
             frame_times: VecDeque::with_capacity(60),
-            point_count: 0,
-            triangle_count: 0,
-            latency_ms: 0.0,
-            bandwidth_mbs: 0.0,
-            messages_per_sec: 0,
-            gpu_memory_mb: 0.0,
-            cpu_memory_mb: 0.0,
         }
     }
 
@@ -71,6 +60,20 @@ impl Panel for PerformancePanel {
     fn ui(&mut self, ui: &mut egui::Ui) {
         self.update();
 
+        // Get stats from shared state
+        let state = self.app_state.lock();
+        let stats = &state.performance_stats;
+        let latency_ms = stats.latency_ms;
+        let bandwidth_mbs = stats.bandwidth_mbs;
+        let messages_per_sec = stats.messages_per_sec();
+        let gpu_memory_mb = stats.gpu_memory_mb;
+        let cpu_memory_mb = stats.cpu_memory_mb;
+        let point_count = stats.point_count;
+        let triangle_count = stats.triangle_count;
+        let has_data = stats.has_received_data();
+        let total_msgs = stats.total_messages_received;
+        drop(state);
+
         egui::Grid::new("performance_grid")
             .num_columns(2)
             .spacing([20.0, 4.0])
@@ -90,50 +93,68 @@ impl Panel for PerformancePanel {
                 ui.label("12");
                 ui.end_row();
 
-                ui.add_space(8.0);
+                ui.label("");
                 ui.end_row();
 
                 ui.label(egui::RichText::new("Data").strong());
                 ui.end_row();
 
                 ui.label("Points:");
-                ui.label(format_number(self.point_count));
+                ui.label(format_number(point_count));
                 ui.end_row();
 
                 ui.label("Triangles:");
-                ui.label(format_number(self.triangle_count));
+                ui.label(format_number(triangle_count));
                 ui.end_row();
 
-                ui.add_space(8.0);
+                ui.label("");
                 ui.end_row();
 
                 ui.label(egui::RichText::new("Network").strong());
                 ui.end_row();
 
                 ui.label("Latency:");
-                ui.label(format!("{:.0} ms", self.latency_ms));
+                if has_data && latency_ms > 0.0 {
+                    ui.label(format!("{latency_ms:.0} ms"));
+                } else if has_data {
+                    ui.label(egui::RichText::new("< 1 ms").weak());
+                } else {
+                    ui.label(egui::RichText::new("No data").weak());
+                }
                 ui.end_row();
 
                 ui.label("Bandwidth:");
-                ui.label(format!("{:.1} MB/s", self.bandwidth_mbs));
+                if has_data {
+                    ui.label(format!("{bandwidth_mbs:.2} MB/s"));
+                } else {
+                    ui.label(egui::RichText::new("-").weak());
+                }
                 ui.end_row();
 
                 ui.label("Messages:");
-                ui.label(format!("{}/s", self.messages_per_sec));
+                if has_data {
+                    ui.label(format!("{messages_per_sec}/s"));
+                } else {
+                    ui.label(egui::RichText::new("-").weak());
+                }
                 ui.end_row();
 
-                ui.add_space(8.0);
+                ui.label("Total:");
+                ui.label(format_number(total_msgs as usize));
+                ui.end_row();
+
+                ui.label("");
                 ui.end_row();
 
                 ui.label(egui::RichText::new("Memory").strong());
                 ui.end_row();
 
                 ui.label("GPU:");
-                ui.label(format!("{:.0} MB", self.gpu_memory_mb));
+                ui.label(format!("{gpu_memory_mb:.1} MB"));
                 ui.end_row();
 
                 ui.label("CPU:");
-                ui.label(format!("{:.0} MB", self.cpu_memory_mb));
+                ui.label(format!("{cpu_memory_mb:.1} MB"));
                 ui.end_row();
             });
 
