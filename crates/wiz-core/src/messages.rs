@@ -209,3 +209,212 @@ pub struct TopicInfo {
     pub name: String,
     pub msg_type: String,
 }
+
+// ============================================================================
+// rosgraph_msgs/msg/Clock
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Clock {
+    pub clock: f64, // seconds since epoch
+}
+
+// ============================================================================
+// std_msgs/msg/String
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StringMsg {
+    pub data: String,
+}
+
+// ============================================================================
+// rcl_interfaces/msg/Log
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum LogLevel {
+    Debug = 10,
+    Info = 20,
+    Warn = 30,
+    Error = 40,
+    Fatal = 50,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Log {
+    pub stamp: f64,
+    pub level: LogLevel,
+    pub name: String,
+    pub msg: String,
+    pub file: String,
+    pub function: String,
+    pub line: u32,
+}
+
+// ============================================================================
+// tf2_msgs/msg/TFMessage
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransformStamped {
+    pub header: Header,
+    pub child_frame_id: String,
+    pub transform: Transform,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Transform {
+    pub translation: [f64; 3],
+    pub rotation: [f64; 4], // quaternion (x, y, z, w)
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            translation: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TFMessage {
+    pub transforms: Vec<TransformStamped>,
+}
+
+// ============================================================================
+// nav_msgs/msg/Odometry
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Twist {
+    pub linear: [f64; 3],
+    pub angular: [f64; 3],
+}
+
+impl Default for Twist {
+    fn default() -> Self {
+        Self {
+            linear: [0.0, 0.0, 0.0],
+            angular: [0.0, 0.0, 0.0],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TwistStamped {
+    pub header: Header,
+    pub twist: Twist,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TwistWithCovariance {
+    pub twist: Twist,
+    pub covariance: Vec<f64>, // 36 elements (6x6 matrix)
+}
+
+impl Default for TwistWithCovariance {
+    fn default() -> Self {
+        Self {
+            twist: Twist::default(),
+            covariance: vec![0.0; 36],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PoseWithCovariance {
+    pub pose: Pose,
+    pub covariance: Vec<f64>, // 36 elements (6x6 matrix)
+}
+
+impl Default for PoseWithCovariance {
+    fn default() -> Self {
+        Self {
+            pose: Pose::default(),
+            covariance: vec![0.0; 36],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Odometry {
+    pub header: Header,
+    pub child_frame_id: String,
+    pub pose: PoseWithCovariance,
+    pub twist: TwistWithCovariance,
+}
+
+// ============================================================================
+// sensor_msgs/msg/Imu
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Imu {
+    pub header: Header,
+    pub orientation: [f64; 4], // quaternion (x, y, z, w)
+    pub orientation_covariance: [f64; 9],
+    pub angular_velocity: [f64; 3],
+    pub angular_velocity_covariance: [f64; 9],
+    pub linear_acceleration: [f64; 3],
+    pub linear_acceleration_covariance: [f64; 9],
+}
+
+// ============================================================================
+// sensor_msgs/msg/JointState
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JointState {
+    pub header: Header,
+    pub name: Vec<String>,
+    pub position: Vec<f64>,
+    pub velocity: Vec<f64>,
+    pub effort: Vec<f64>,
+}
+
+// ============================================================================
+// sensor_msgs/msg/Image
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Image {
+    pub header: Header,
+    pub height: u32,
+    pub width: u32,
+    pub encoding: String,
+    pub is_bigendian: bool,
+    pub step: u32,
+    #[serde(with = "serde_bytes")]
+    pub data: Vec<u8>,
+}
+
+// ============================================================================
+// sensor_msgs/msg/CameraInfo
+// ============================================================================
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RegionOfInterest {
+    pub x_offset: u32,
+    pub y_offset: u32,
+    pub height: u32,
+    pub width: u32,
+    pub do_rectify: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraInfo {
+    pub header: Header,
+    pub height: u32,
+    pub width: u32,
+    pub distortion_model: String,
+    pub d: Vec<f64>,  // distortion parameters
+    pub k: [f64; 9],  // intrinsic camera matrix
+    pub r: [f64; 9],  // rectification matrix
+    pub p: [f64; 12], // projection matrix
+    pub binning_x: u32,
+    pub binning_y: u32,
+    pub roi: RegionOfInterest,
+}
