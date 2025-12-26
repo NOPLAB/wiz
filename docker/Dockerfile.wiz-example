@@ -1,0 +1,34 @@
+# wiz_example Demo Container
+#
+# This image runs wiz_example demo nodes that publish:
+# - MarkerArray (animated shapes)
+# - PointCloud2 (rainbow spiral)
+# - TF frames (animated robot arm)
+#
+# Build: docker build -f docker/Dockerfile.wiz-example -t wiz-example:humble .
+
+FROM osrf/ros:humble-desktop
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    ros-humble-visualization-msgs \
+    ros-humble-sensor-msgs \
+    ros-humble-geometry-msgs \
+    ros-humble-tf2-ros \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create workspace
+WORKDIR /ros2_ws
+
+# Copy wiz_example package
+COPY examples/ros2/wiz_example src/wiz_example
+
+# Build the package
+RUN . /opt/ros/humble/setup.sh && \
+    colcon build --packages-select wiz_example
+
+# Copy entrypoint
+COPY docker/wiz_example_entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]

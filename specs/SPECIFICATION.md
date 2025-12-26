@@ -502,7 +502,7 @@ axis_length = 0.5
 
 - [x] TFフレーム表示 (座標軸)
 - [x] PoseStamped表示 (矢印による姿勢可視化)
-- [ ] Marker/MarkerArray ※メッセージ型定義済み、レンダラー未実装
+- [x] Marker/MarkerArray (Cube, Sphere, Cylinder, Arrow, LineStrip, LineList, CubeList, SphereList, Points)
 - [ ] Path表示 ※メッセージ型定義済み
 - [ ] 表示設定の永続化
 
@@ -519,7 +519,7 @@ axis_length = 0.5
 
 - [ ] URDF表示
 - [ ] ドキュメント
-- [ ] E2Eテスト
+- [x] E2Eテスト (wiz-server WebSocket/HTTP)
 
 ## Dependencies
 
@@ -584,4 +584,4 @@ find_package(tf2_ros REQUIRED)
 
 ## License
 
-Apache 2.0 / MIT dual license
+MIT

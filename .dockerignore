@@ -21,8 +21,8 @@ specs/
 # Claude
 .claude/
 
-# Docker
-docker/
+# Docker-compose files only
+docker-compose*.yml
 
 # OS
 .DS_Store

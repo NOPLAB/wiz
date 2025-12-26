@@ -21,13 +21,14 @@ ENV TURTLEBOT3_MODEL=waffle_pi
 # Add Gazebo model path
 ENV GAZEBO_MODEL_PATH=/opt/ros/humble/share/turtlebot3_gazebo/models:${GAZEBO_MODEL_PATH}
 
-# Create entrypoint script
-RUN echo '#!/bin/bash\n\
-set -e\n\
-source /opt/ros/humble/setup.bash\n\
-exec "$@"' > /ros_entrypoint.sh && chmod +x /ros_entrypoint.sh
+# Install gazebo_ros to ensure plugins are available
+RUN apt-get update && apt-get install -y \
+    ros-humble-gazebo-ros \
+    ros-humble-gazebo-ros-pkgs \
+    && rm -rf /var/lib/apt/lists/*
 
-ENTRYPOINT ["/ros_entrypoint.sh"]
+# Copy and setup custom entrypoint that waits for Gazebo
+COPY docker/gazebo_entrypoint.sh /gazebo_entrypoint.sh
+RUN chmod +x /gazebo_entrypoint.sh
 
-# Launch TurtleBot3 in Gazebo world
-CMD ["ros2", "launch", "turtlebot3_gazebo", "turtlebot3_world.launch.py"]
+CMD ["/gazebo_entrypoint.sh"]

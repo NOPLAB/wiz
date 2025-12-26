@@ -1,0 +1,7 @@
+# Demo configuration
+#
+# Topics published by demo nodes:
+# - /demo_markers (visualization_msgs/MarkerArray)
+# - /demo_pointcloud (sensor_msgs/PointCloud2)
+# - TF frames: map, odom, base_link, laser_frame, camera_frame,
+#              arm_base, arm_link1, arm_link2, end_effector

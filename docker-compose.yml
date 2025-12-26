@@ -11,6 +11,8 @@ services:
       - "9090:9090"
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    profiles:
+      - example
     # Uncomment to enable cyclonedds
     # volumes:
     #   - ./cyclonedds.xml:/etc/cyclonedds/cyclonedds.xml
@@ -26,6 +28,19 @@ services:
       - "9090:9090"
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+
+  # ============================================
+  # wiz_example Demo (lightweight demo nodes)
+  # ============================================
+  wiz-example:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.wiz-example
+    image: wiz-example:humble
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    profiles:
+      - example
 
   # ============================================
   # TurtleBot3 Gazebo Simulation (for testing)
